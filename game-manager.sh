@@ -67,6 +67,22 @@ start_frontend() {
         return
     fi
 
+    # Check if npm is installed
+    if ! command -v npm &> /dev/null; then
+        echo " Error: 'npm' is not installed. Please install Node.js and npm (e.g. 'sudo apt update && sudo apt install -y nodejs npm')."
+        return
+    fi
+
+    # Run npm install if node_modules doesn't exist
+    if [ ! -d "$FRONTEND_DIR/node_modules" ]; then
+        echo -n " (Installing node dependencies first)..."
+        (cd "$FRONTEND_DIR" && npm install --no-audit --no-fund)
+        if [ $? -ne 0 ]; then
+            echo " npm install failed."
+            return
+        fi
+    fi
+
     # Start Vite dev server in the background
     cd "$FRONTEND_DIR"
     nohup npm run dev > "$FE_LOG_FILE" 2>&1 &
