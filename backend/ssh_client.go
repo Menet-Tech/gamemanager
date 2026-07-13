@@ -165,7 +165,16 @@ func ExecuteCommand(host *HostServer, cmdStr string) (string, error) {
 	session.Stdout = &stdout
 	session.Stderr = &stderr
 
-	err = session.Run(cmdStr)
+	// If command contains sudo and the host has a password, ensure it uses -S and feed password to stdin
+	if strings.Contains(cmdStr, "sudo") && host.Password != "" {
+		finalCmd := strings.ReplaceAll(cmdStr, "sudo ", "sudo -S ")
+		finalCmd = strings.ReplaceAll(finalCmd, "sudo -S -S", "sudo -S")
+		session.Stdin = strings.NewReader(host.Password + "\n")
+		err = session.Run(finalCmd)
+	} else {
+		err = session.Run(cmdStr)
+	}
+
 	if err != nil {
 		return stdout.String(), fmt.Errorf("ssh command execution failed: %v, stderr: %s", err, stderr.String())
 	}
