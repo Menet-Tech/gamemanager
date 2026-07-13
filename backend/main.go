@@ -56,7 +56,7 @@ func main() {
 		mux.ServeHTTP(w, r)
 	})
 
-	port := 8080
+	port := 8010
 	fmt.Printf("Game Configuration Manager Backend running on port %d...\n", port)
 	err := http.ListenAndServe(fmt.Sprintf(":%d", port), handler)
 	if err != nil {
