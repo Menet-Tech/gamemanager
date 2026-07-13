@@ -12,7 +12,8 @@ import {
   X,
   CheckCircle,
   Eye,
-  EyeOff
+  EyeOff,
+  Pencil
 } from 'lucide-react';
 
 export default function AdminPanel({ section }) {
@@ -41,12 +42,17 @@ export default function AdminPanel({ section }) {
   const [hostPort, setHostPort] = useState(22);
   const [hostUsername, setHostUsername] = useState('');
   const [hostPassword, setHostPassword] = useState('');
+  const [hostRestartCommand, setHostRestartCommand] = useState('');
 
   // Form states - Profiles
   const [profileName, setProfileName] = useState('');
   const [gameType, setGameType] = useState('Palworld');
   const [profileHostId, setProfileHostId] = useState('0'); // '0' means local system
   const [configPath, setConfigPath] = useState('');
+
+  // Edit states
+  const [editingHost, setEditingHost] = useState(null);
+  const [editingProfile, setEditingProfile] = useState(null);
 
   // Form states - Linking
   const [linkUserId, setLinkUserId] = useState('');
@@ -173,7 +179,8 @@ export default function AdminPanel({ section }) {
           ip: hostIP || 'localhost',
           port: parseInt(hostPort) || 22,
           username: hostUsername,
-          password: hostPassword
+          password: hostPassword,
+          restartCommand: hostRestartCommand
         }),
       });
       setHostName('');
@@ -181,6 +188,7 @@ export default function AdminPanel({ section }) {
       setHostPort(22);
       setHostUsername('');
       setHostPassword('');
+      setHostRestartCommand('');
       showSuccessMessage('Host server added!');
       fetchData();
     } catch (err) {
@@ -239,6 +247,78 @@ export default function AdminPanel({ section }) {
       fetchData();
     } catch (err) {
       setError(err.message || 'Failed to delete profile');
+    }
+  };
+
+  const startEditHost = (host) => {
+    setEditingHost(host);
+    setHostName(host.name || '');
+    setHostIP(host.ip || '');
+    setHostPort(host.port || 22);
+    setHostUsername(host.username || '');
+    setHostPassword('');
+    setHostRestartCommand(host.restartCommand || '');
+  };
+
+  const handleEditHost = async (e) => {
+    e.preventDefault();
+    setError('');
+    try {
+      await apiFetch(`/admin/hosts/${editingHost.id}`, {
+        method: 'PUT',
+        body: JSON.stringify({
+          name: hostName,
+          ip: hostIP,
+          port: parseInt(hostPort) || 22,
+          username: hostUsername,
+          password: hostPassword,
+          restartCommand: hostRestartCommand
+        }),
+      });
+      setEditingHost(null);
+      setHostName('');
+      setHostIP('');
+      setHostPort(22);
+      setHostUsername('');
+      setHostPassword('');
+      setHostRestartCommand('');
+      showSuccessMessage('Host server updated successfully!');
+      fetchData();
+    } catch (err) {
+      setError(err.message || 'Failed to update host');
+    }
+  };
+
+  const startEditProfile = (profile) => {
+    setEditingProfile(profile);
+    setProfileName(profile.name || '');
+    setGameType(profile.gameType || 'Palworld');
+    setProfileHostId(profile.hostId ? profile.hostId.toString() : '0');
+    setConfigPath(profile.configPath || '');
+  };
+
+  const handleEditProfile = async (e) => {
+    e.preventDefault();
+    setError('');
+    try {
+      await apiFetch(`/admin/profiles/${editingProfile.id}`, {
+        method: 'PUT',
+        body: JSON.stringify({
+          name: profileName,
+          gameType,
+          hostId: parseInt(profileHostId),
+          configPath
+        }),
+      });
+      setEditingProfile(null);
+      setProfileName('');
+      setGameType('Palworld');
+      setProfileHostId('0');
+      setConfigPath('');
+      showSuccessMessage('Game profile updated successfully!');
+      fetchData();
+    } catch (err) {
+      setError(err.message || 'Failed to update profile');
     }
   };
 
@@ -446,6 +526,16 @@ export default function AdminPanel({ section }) {
                   className="w-full px-4 py-2.5 rounded-xl bg-slate-950/40 border border-slate-800 text-white text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 transition-all"
                 />
               </div>
+              <div>
+                <label className="block text-xs font-semibold text-slate-400 mb-1.5 ml-1">Restart Command (optional)</label>
+                <input
+                  type="text"
+                  value={hostRestartCommand}
+                  onChange={(e) => setHostRestartCommand(e.target.value)}
+                  placeholder="e.g. systemctl restart palworld"
+                  className="w-full px-4 py-2.5 rounded-xl bg-slate-950/40 border border-slate-800 text-white text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 transition-all"
+                />
+              </div>
               <button
                 type="submit"
                 className="w-full mt-2 py-2.5 rounded-xl bg-primary-600 hover:bg-primary-500 text-white font-semibold text-sm transition-all"
@@ -639,13 +729,22 @@ export default function AdminPanel({ section }) {
                         <td className="py-3.5 text-slate-400 font-mono text-xs">{h.ip}:{h.port}</td>
                         <td className="py-3.5 text-slate-400">{h.username || 'local'}</td>
                         <td className="py-3.5 text-right pr-2">
-                          <button
-                            onClick={() => handleDeleteHost(h.id)}
-                            className="p-2 text-slate-500 hover:text-accent-rose rounded-lg hover:bg-accent-rose/10 transition-all"
-                            title="Remove Server"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </button>
+                          <div className="inline-flex items-center gap-2">
+                            <button
+                              onClick={() => startEditHost(h)}
+                              className="p-2 text-slate-400 hover:text-white rounded-lg hover:bg-slate-800/50 transition-all"
+                              title="Edit Server"
+                            >
+                              <Pencil className="w-4 h-4" />
+                            </button>
+                            <button
+                              onClick={() => handleDeleteHost(h.id)}
+                              className="p-2 text-slate-500 hover:text-accent-rose rounded-lg hover:bg-accent-rose/10 transition-all"
+                              title="Remove Server"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          </div>
                         </td>
                       </tr>
                     ))}
@@ -684,13 +783,22 @@ export default function AdminPanel({ section }) {
                           {p.configPath}
                         </td>
                         <td className="py-3.5 text-right pr-2">
-                          <button
-                            onClick={() => handleDeleteProfile(p.id)}
-                            className="p-2 text-slate-500 hover:text-accent-rose rounded-lg hover:bg-accent-rose/10 transition-all"
-                            title="Delete Profile"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </button>
+                          <div className="inline-flex items-center gap-2">
+                            <button
+                              onClick={() => startEditProfile(p)}
+                              className="p-2 text-slate-400 hover:text-white rounded-lg hover:bg-slate-800/50 transition-all"
+                              title="Edit Profile"
+                            >
+                              <Pencil className="w-4 h-4" />
+                            </button>
+                            <button
+                              onClick={() => handleDeleteProfile(p.id)}
+                              className="p-2 text-slate-500 hover:text-accent-rose rounded-lg hover:bg-accent-rose/10 transition-all"
+                              title="Delete Profile"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          </div>
                         </td>
                       </tr>
                     ))}
@@ -789,6 +897,215 @@ export default function AdminPanel({ section }) {
                   className="px-5 py-2 rounded-xl bg-primary-600 hover:bg-primary-500 text-white font-semibold text-sm transition-all shadow-md shadow-primary-600/20"
                 >
                   Save Password
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* EDIT HOST MODAL */}
+      {editingHost !== null && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-fade-in">
+          <div className="w-full max-w-lg p-6 rounded-2xl glass animate-fade-in max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between mb-4 pb-2 border-b border-slate-800">
+              <h3 className="text-lg font-bold text-white flex items-center gap-2">
+                <Server className="w-5 h-5 text-primary-500" />
+                <span>Edit Host Server</span>
+              </h3>
+              <button 
+                onClick={() => {
+                  setEditingHost(null);
+                  setHostName('');
+                  setHostIP('');
+                  setHostPort(22);
+                  setHostUsername('');
+                  setHostPassword('');
+                  setHostRestartCommand('');
+                }}
+                className="text-slate-500 hover:text-white"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <form onSubmit={handleEditHost} className="space-y-4">
+              <div>
+                <label className="block text-xs font-semibold text-slate-400 mb-1.5">Server Friendly Name</label>
+                <input
+                  type="text"
+                  value={hostName}
+                  onChange={(e) => setHostName(e.target.value)}
+                  placeholder="e.g. Palworld VPS Singapore"
+                  className="w-full px-4 py-2.5 rounded-xl bg-slate-950/50 border border-slate-800 text-white text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 transition-all"
+                  required
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-slate-400 mb-1.5">IP Address / Hostname</label>
+                <input
+                  type="text"
+                  value={hostIP}
+                  onChange={(e) => setHostIP(e.target.value)}
+                  placeholder="e.g. 192.168.1.100 (blank for localhost)"
+                  className="w-full px-4 py-2.5 rounded-xl bg-slate-950/50 border border-slate-800 text-white text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 transition-all"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-slate-400 mb-1.5">SSH Port</label>
+                <input
+                  type="number"
+                  value={hostPort}
+                  onChange={(e) => setHostPort(e.target.value)}
+                  placeholder="22"
+                  className="w-full px-4 py-2.5 rounded-xl bg-slate-950/50 border border-slate-800 text-white text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 transition-all"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-slate-400 mb-1.5">SSH Username</label>
+                <input
+                  type="text"
+                  value={hostUsername}
+                  onChange={(e) => setHostUsername(e.target.value)}
+                  placeholder="e.g. root"
+                  className="w-full px-4 py-2.5 rounded-xl bg-slate-950/50 border border-slate-800 text-white text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 transition-all"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-slate-400 mb-1.5">SSH Password</label>
+                <input
+                  type="password"
+                  value={hostPassword}
+                  onChange={(e) => setHostPassword(e.target.value)}
+                  placeholder="Leave blank to keep existing password"
+                  className="w-full px-4 py-2.5 rounded-xl bg-slate-950/50 border border-slate-800 text-white text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 transition-all"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-slate-400 mb-1.5">Restart Command (optional)</label>
+                <input
+                  type="text"
+                  value={hostRestartCommand}
+                  onChange={(e) => setHostRestartCommand(e.target.value)}
+                  placeholder="e.g. systemctl restart palworld"
+                  className="w-full px-4 py-2.5 rounded-xl bg-slate-950/50 border border-slate-800 text-white text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 transition-all"
+                />
+              </div>
+              <div className="flex justify-end gap-3 mt-6">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setEditingHost(null);
+                    setHostName('');
+                    setHostIP('');
+                    setHostPort(22);
+                    setHostUsername('');
+                    setHostPassword('');
+                    setHostRestartCommand('');
+                  }}
+                  className="px-4 py-2 rounded-xl text-slate-400 hover:text-white hover:bg-slate-800 transition-all text-sm font-semibold"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="px-5 py-2 rounded-xl bg-primary-600 hover:bg-primary-500 text-white font-semibold text-sm transition-all shadow-md shadow-primary-600/20"
+                >
+                  Save Changes
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* EDIT PROFILE MODAL */}
+      {editingProfile !== null && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-fade-in">
+          <div className="w-full max-w-lg p-6 rounded-2xl glass animate-fade-in max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between mb-4 pb-2 border-b border-slate-800">
+              <h3 className="text-lg font-bold text-white flex items-center gap-2">
+                <FileCode className="w-5 h-5 text-primary-500" />
+                <span>Edit Game Profile</span>
+              </h3>
+              <button 
+                onClick={() => {
+                  setEditingProfile(null);
+                  setProfileName('');
+                  setGameType('Palworld');
+                  setProfileHostId('0');
+                  setConfigPath('');
+                }}
+                className="text-slate-500 hover:text-white"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <form onSubmit={handleEditProfile} className="space-y-4">
+              <div>
+                <label className="block text-xs font-semibold text-slate-400 mb-1.5">Profile Name</label>
+                <input
+                  type="text"
+                  value={profileName}
+                  onChange={(e) => setProfileName(e.target.value)}
+                  placeholder="e.g. Main Palworld Server"
+                  className="w-full px-4 py-2.5 rounded-xl bg-slate-950/50 border border-slate-800 text-white text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 transition-all"
+                  required
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-slate-400 mb-1.5">Select Game</label>
+                <select
+                  value={gameType}
+                  onChange={(e) => setGameType(e.target.value)}
+                  className="w-full px-4 py-2.5 rounded-xl bg-slate-950/50 border border-slate-800 text-white text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 transition-all"
+                >
+                  <option value="Palworld">Palworld Settings (Parsed Form)</option>
+                  <option value="Other">Other Game (Raw Text Area)</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-slate-400 mb-1.5">Host Server</label>
+                <select
+                  value={profileHostId}
+                  onChange={(e) => setProfileHostId(e.target.value)}
+                  className="w-full px-4 py-2.5 rounded-xl bg-slate-950/50 border border-slate-800 text-white text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 transition-all"
+                >
+                  <option value="0">Local System (Reads filesystem directly)</option>
+                  {hosts.map(h => (
+                    <option key={h.id} value={h.id}>{h.name} ({h.ip})</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-slate-400 mb-1.5">Config File Path on Host</label>
+                <input
+                  type="text"
+                  value={configPath}
+                  onChange={(e) => setConfigPath(e.target.value)}
+                  placeholder="e.g. /home/steam/Pal/Saved/Config/LinuxServer/PalWorldSettings.ini"
+                  className="w-full px-4 py-2.5 rounded-xl bg-slate-950/50 border border-slate-800 text-white text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 transition-all"
+                  required
+                />
+              </div>
+              <div className="flex justify-end gap-3 mt-6">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setEditingProfile(null);
+                    setProfileName('');
+                    setGameType('Palworld');
+                    setProfileHostId('0');
+                    setConfigPath('');
+                  }}
+                  className="px-4 py-2 rounded-xl text-slate-400 hover:text-white hover:bg-slate-800 transition-all text-sm font-semibold"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="px-5 py-2 rounded-xl bg-primary-600 hover:bg-primary-500 text-white font-semibold text-sm transition-all shadow-md shadow-primary-600/20"
+                >
+                  Save Changes
                 </button>
               </div>
             </form>

@@ -86,7 +86,7 @@ export default function Dashboard({ user, onLogout }) {
               GM
             </div>
             <span className="font-bold text-lg bg-gradient-to-r from-white to-slate-300 bg-clip-text text-transparent">
-              Game Manager
+              Menet Games Management
             </span>
           </div>
 

@@ -49,7 +49,7 @@ export default function Login({ onLoginSuccess }) {
             <KeyRound className="w-8 h-8" />
           </div>
           <h2 className="text-2xl font-bold tracking-tight text-white font-sans">
-            Server Configuration
+            Menet Games Management
           </h2>
           <p className="text-sm text-slate-400 mt-1">
             Sign in to manage game configurations

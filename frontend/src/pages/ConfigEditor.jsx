@@ -82,12 +82,12 @@ export default function ConfigEditor({ profile, onBack }) {
         settings: useForm ? settings : {},
       };
 
-      await apiFetch(`/profiles/${profile.id}/config`, {
+      const res = await apiFetch(`/profiles/${profile.id}/config`, {
         method: 'POST',
         body: JSON.stringify(payload),
       });
 
-      setSuccess('Configuration saved successfully and updated on server!');
+      setSuccess(res?.message || 'Configuration saved successfully!');
       setTimeout(() => setSuccess(''), 4000);
       
       // Reload config to get latest clean raw/parsed content

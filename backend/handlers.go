@@ -353,7 +353,7 @@ func DeleteUserHandler(w http.ResponseWriter, r *http.Request) {
 func ManageHostsHandler(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case http.MethodGet:
-		rows, err := db.Query("SELECT id, name, ip, port, username FROM host_servers")
+		rows, err := db.Query("SELECT id, name, ip, port, username, restart_command FROM host_servers")
 		if err != nil {
 			sendError(w, http.StatusInternalServerError, "database error")
 			return
@@ -363,7 +363,9 @@ func ManageHostsHandler(w http.ResponseWriter, r *http.Request) {
 		var hosts []HostServer
 		for rows.Next() {
 			var h HostServer
-			if err := rows.Scan(&h.ID, &h.Name, &h.IP, &h.Port, &h.Username); err == nil {
+			var restartCmd sql.NullString
+			if err := rows.Scan(&h.ID, &h.Name, &h.IP, &h.Port, &h.Username, &restartCmd); err == nil {
+				h.RestartCommand = restartCmd.String
 				hosts = append(hosts, h)
 			}
 		}
@@ -389,8 +391,8 @@ func ManageHostsHandler(w http.ResponseWriter, r *http.Request) {
 			h.Port = 22
 		}
 
-		res, err := db.Exec("INSERT INTO host_servers (name, ip, port, username, password) VALUES (?, ?, ?, ?, ?)",
-			h.Name, h.IP, h.Port, h.Username, h.Password)
+		res, err := db.Exec("INSERT INTO host_servers (name, ip, port, username, password, restart_command) VALUES (?, ?, ?, ?, ?, ?)",
+			h.Name, h.IP, h.Port, h.Username, h.Password, h.RestartCommand)
 		if err != nil {
 			sendError(w, http.StatusInternalServerError, "failed to save host server")
 			return
@@ -403,25 +405,69 @@ func ManageHostsHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func DeleteHostHandler(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodDelete {
-		sendError(w, http.StatusMethodNotAllowed, "method not allowed")
+func HostByIDHandler(w http.ResponseWriter, r *http.Request) {
+	if enableCORS(w, r) {
 		return
 	}
-
 	id, err := getPathParamID(r, "hosts")
 	if err != nil {
 		sendError(w, http.StatusBadRequest, "invalid host id")
 		return
 	}
 
-	_, err = db.Exec("DELETE FROM host_servers WHERE id = ?", id)
-	if err != nil {
-		sendError(w, http.StatusInternalServerError, "failed to delete host server")
-		return
-	}
+	switch r.Method {
+	case http.MethodDelete:
+		_, err = db.Exec("DELETE FROM host_servers WHERE id = ?", id)
+		if err != nil {
+			sendError(w, http.StatusInternalServerError, "failed to delete host server")
+			return
+		}
+		sendJSON(w, http.StatusOK, map[string]string{"message": "host server deleted successfully"})
 
-	sendJSON(w, http.StatusOK, map[string]string{"message": "host server deleted successfully"})
+	case http.MethodPut:
+		var h HostServer
+		if err := json.NewDecoder(r.Body).Decode(&h); err != nil {
+			sendError(w, http.StatusBadRequest, "invalid request body")
+			return
+		}
+
+		if h.Name == "" {
+			sendError(w, http.StatusBadRequest, "server name is required")
+			return
+		}
+
+		// Default values for local servers if IP is empty
+		if h.IP == "" {
+			h.IP = "localhost"
+		}
+		if h.Port <= 0 {
+			h.Port = 22
+		}
+
+		var query string
+		var args []interface{}
+
+		if h.Password != "" {
+			query = "UPDATE host_servers SET name = ?, ip = ?, port = ?, username = ?, password = ?, restart_command = ? WHERE id = ?"
+			args = []interface{}{h.Name, h.IP, h.Port, h.Username, h.Password, h.RestartCommand, id}
+		} else {
+			query = "UPDATE host_servers SET name = ?, ip = ?, port = ?, username = ?, restart_command = ? WHERE id = ?"
+			args = []interface{}{h.Name, h.IP, h.Port, h.Username, h.RestartCommand, id}
+		}
+
+		_, err = db.Exec(query, args...)
+		if err != nil {
+			sendError(w, http.StatusInternalServerError, "failed to update host server")
+			return
+		}
+
+		h.ID = id
+		h.Password = ""
+		sendJSON(w, http.StatusOK, h)
+
+	default:
+		sendError(w, http.StatusMethodNotAllowed, "method not allowed")
+	}
 }
 
 // --- ADMIN GAME PROFILES HANDLERS ---
@@ -481,25 +527,50 @@ func ManageProfilesHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func DeleteProfileHandler(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodDelete {
-		sendError(w, http.StatusMethodNotAllowed, "method not allowed")
+func ProfileByIDHandler(w http.ResponseWriter, r *http.Request) {
+	if enableCORS(w, r) {
 		return
 	}
-
 	id, err := getPathParamID(r, "profiles")
 	if err != nil {
 		sendError(w, http.StatusBadRequest, "invalid profile id")
 		return
 	}
 
-	_, err = db.Exec("DELETE FROM game_profiles WHERE id = ?", id)
-	if err != nil {
-		sendError(w, http.StatusInternalServerError, "failed to delete game profile")
-		return
-	}
+	switch r.Method {
+	case http.MethodDelete:
+		_, err = db.Exec("DELETE FROM game_profiles WHERE id = ?", id)
+		if err != nil {
+			sendError(w, http.StatusInternalServerError, "failed to delete game profile")
+			return
+		}
+		sendJSON(w, http.StatusOK, map[string]string{"message": "game profile deleted successfully"})
 
-	sendJSON(w, http.StatusOK, map[string]string{"message": "game profile deleted successfully"})
+	case http.MethodPut:
+		var p GameProfile
+		if err := json.NewDecoder(r.Body).Decode(&p); err != nil {
+			sendError(w, http.StatusBadRequest, "invalid request body")
+			return
+		}
+
+		if p.Name == "" || p.GameType == "" || p.ConfigPath == "" {
+			sendError(w, http.StatusBadRequest, "missing profile name, game type, or config path")
+			return
+		}
+
+		_, err = db.Exec("UPDATE game_profiles SET name = ?, game_type = ?, host_id = ?, config_path = ? WHERE id = ?",
+			p.Name, p.GameType, p.HostID, p.ConfigPath, id)
+		if err != nil {
+			sendError(w, http.StatusInternalServerError, "failed to update game profile")
+			return
+		}
+
+		p.ID = id
+		sendJSON(w, http.StatusOK, p)
+
+	default:
+		sendError(w, http.StatusMethodNotAllowed, "method not allowed")
+	}
 }
 
 // --- ADMIN USER PROFILE LINKING HANDLERS ---
@@ -667,19 +738,19 @@ func getProfileAndHost(profileID int) (*GameProfile, *HostServer, error) {
 	var p GameProfile
 	var h HostServer
 	var hostID sql.NullInt64
-	var hostName, hostIP, hostUser, hostPass sql.NullString
+	var hostName, hostIP, hostUser, hostPass, hostRestartCmd sql.NullString
 	var hostPort sql.NullInt64
 
 	query := `
 		SELECT p.id, p.name, p.game_type, p.host_id, p.config_path, 
-		       h.id, h.name, h.ip, h.port, h.username, h.password
+		       h.id, h.name, h.ip, h.port, h.username, h.password, h.restart_command
 		FROM game_profiles p
 		LEFT JOIN host_servers h ON p.host_id = h.id
 		WHERE p.id = ?
 	`
 	err := db.QueryRow(query, profileID).Scan(
 		&p.ID, &p.Name, &p.GameType, &hostID, &p.ConfigPath,
-		&h.ID, &hostName, &hostIP, &hostPort, &hostUser, &hostPass,
+		&h.ID, &hostName, &hostIP, &hostPort, &hostUser, &hostPass, &hostRestartCmd,
 	)
 	if err != nil {
 		return nil, nil, err
@@ -693,6 +764,7 @@ func getProfileAndHost(profileID int) (*GameProfile, *HostServer, error) {
 		h.Port = int(hostPort.Int64)
 		h.Username = hostUser.String
 		h.Password = hostPass.String
+		h.RestartCommand = hostRestartCmd.String
 		return &p, &h, nil
 	}
 
@@ -810,7 +882,21 @@ func ManageConfigHandler(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		sendJSON(w, http.StatusOK, map[string]string{"message": "configuration saved successfully"})
+		// Execute restart command if configured
+		restartMessage := ""
+		if host != nil && host.RestartCommand != "" {
+			output, err := ExecuteCommand(host, host.RestartCommand)
+			if err != nil {
+				log.Printf("[ERROR] Restart command failed: %v, output: %s", err, output)
+				restartMessage = " (but failed to restart: " + err.Error() + ")"
+			} else {
+				restartMessage = " and server restarted successfully"
+			}
+		}
+
+		sendJSON(w, http.StatusOK, map[string]string{
+			"message": "Configuration saved successfully" + restartMessage,
+		})
 	}
 }
 

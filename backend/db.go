@@ -33,7 +33,8 @@ func initDB() {
 			ip TEXT,
 			port INTEGER,
 			username TEXT,
-			password TEXT
+			password TEXT,
+			restart_command TEXT
 		);`,
 		`CREATE TABLE IF NOT EXISTS game_profiles (
 			id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -61,6 +62,7 @@ func initDB() {
 
 	// Safely alter existing table to add must_change_password column if it doesn't exist
 	_, _ = db.Exec("ALTER TABLE users ADD COLUMN must_change_password INTEGER DEFAULT 0")
+	_, _ = db.Exec("ALTER TABLE host_servers ADD COLUMN restart_command TEXT")
 
 	// Insert default admin if no users exist
 	var count int

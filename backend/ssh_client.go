@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"fmt"
 	"os"
+	"os/exec"
+	"runtime"
 	"strings"
 	"time"
 
@@ -119,4 +121,54 @@ func getSSHClient(host *HostServer) (*ssh.Client, error) {
 func shellQuote(s string) string {
 	// Escape single quotes for use inside shell single quotes
 	return "'" + strings.ReplaceAll(s, "'", "'\\''") + "'"
+}
+
+// ExecuteCommand runs a command either locally or on a remote host via SSH
+func ExecuteCommand(host *HostServer, cmdStr string) (string, error) {
+	if cmdStr == "" {
+		return "", nil
+	}
+
+	if isLocal(host) {
+		var cmd *exec.Cmd
+		if runtime.GOOS == "windows" {
+			cmd = exec.Command("cmd", "/c", cmdStr)
+		} else {
+			cmd = exec.Command("sh", "-c", cmdStr)
+		}
+
+		var stdout, stderr bytes.Buffer
+		cmd.Stdout = &stdout
+		cmd.Stderr = &stderr
+
+		err := cmd.Run()
+		if err != nil {
+			return stdout.String(), fmt.Errorf("local execution failed: %v, stderr: %s", err, stderr.String())
+		}
+		return stdout.String(), nil
+	}
+
+	// Remote read via SSH
+	client, err := getSSHClient(host)
+	if err != nil {
+		return "", fmt.Errorf("ssh connect error: %w", err)
+	}
+	defer client.Close()
+
+	session, err := client.NewSession()
+	if err != nil {
+		return "", fmt.Errorf("ssh session error: %w", err)
+	}
+	defer session.Close()
+
+	var stdout, stderr bytes.Buffer
+	session.Stdout = &stdout
+	session.Stderr = &stderr
+
+	err = session.Run(cmdStr)
+	if err != nil {
+		return stdout.String(), fmt.Errorf("ssh command execution failed: %v, stderr: %s", err, stderr.String())
+	}
+
+	return stdout.String(), nil
 }

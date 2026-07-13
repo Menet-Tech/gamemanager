@@ -40,10 +40,10 @@ func main() {
 	})))
 
 	mux.HandleFunc("/api/admin/hosts", AuthMiddleware(AdminMiddleware(ManageHostsHandler)))
-	mux.HandleFunc("/api/admin/hosts/", AuthMiddleware(AdminMiddleware(DeleteHostHandler)))
+	mux.HandleFunc("/api/admin/hosts/", AuthMiddleware(AdminMiddleware(HostByIDHandler)))
 
 	mux.HandleFunc("/api/admin/profiles", AuthMiddleware(AdminMiddleware(ManageProfilesHandler)))
-	mux.HandleFunc("/api/admin/profiles/", AuthMiddleware(AdminMiddleware(DeleteProfileHandler)))
+	mux.HandleFunc("/api/admin/profiles/", AuthMiddleware(AdminMiddleware(ProfileByIDHandler)))
 
 	mux.HandleFunc("/api/admin/user-profiles", AuthMiddleware(AdminMiddleware(ManageUserProfilesHandler)))
 	mux.HandleFunc("/api/admin/user-profiles/", AuthMiddleware(AdminMiddleware(UnlinkUserProfileHandler)))
