@@ -1,20 +1,4 @@
-const getApiBase = () => {
-  // If Vite env VITE_API_BASE is defined (e.g. in .env file or build time), use it
-  if (import.meta.env.VITE_API_BASE) {
-    return import.meta.env.VITE_API_BASE;
-  }
-  
-  // If running behind a reverse proxy on standard HTTP/HTTPS ports (80/443), use same-origin relative path
-  const { protocol, hostname, port } = window.location;
-  if (!port || port === '80' || port === '443') {
-    return '/api';
-  }
-  
-  // Otherwise, default to port 8010 on the same host (useful for local development/direct IP testing)
-  return `${protocol}//${hostname}:8010/api`;
-};
-
-export const API_BASE = getApiBase();
+export const API_BASE = "/api";
 
 export async function apiFetch(path, options = {}) {
   const token = localStorage.getItem("token");
