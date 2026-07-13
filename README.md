@@ -6,10 +6,8 @@ A secure, production-ready, web-based server configuration manager built using a
 
 ## Technical Stack & Ports
 
-*   **Backend**: Go (Golang) 1.22+, SQLite (pure Go compiler `modernc.org/sqlite` without CGO), SSH client (`golang.org/x/crypto/ssh`).
-    *   **Port**: `8010`
-*   **Frontend**: React.js, Vite, Tailwind CSS v4 (with PostCSS), Lucide React.
-    *   **Port**: `8011`
+*   **Production Deployment (Port 8010)**: The React app is built (`npm run build`) into static files inside `frontend/dist` and served directly by the Go backend on port **`8010`**. No other node processes are needed in production, preventing HMR WebSocket issues.
+*   **Development Mode (Port 8011)**: Runs the React frontend via Vite dev server on port **`8011`** with Hot Module Replacement (HMR) enabled, proxying API requests to the Go backend on port `8010`.
 
 ---
 
@@ -25,14 +23,10 @@ A secure, production-ready, web-based server configuration manager built using a
 *   **Security Logging**: Detailed `[SECURITY]` logging registers logins (successful/failed with client IPs) and password change operations.
 *   **CORS & Input Sanitization**: Secure dynamic origin headers and strict integer conversions for parameterized endpoints.
 
-### 3. Dynamic API Routing (Domain & Reverse Proxy Plug-and-Play)
-The frontend automatically resolves the API Base URL:
-*   **Localhost / Direct IP Dev**: Derives the current browser IP/host and targets backend port `8010` (e.g. `http://localhost:8010/api` or `http://192.168.1.100:8010/api`).
-*   **Production Reverse Proxy (Nginx + SSL)**: If served on standard ports (80/443), it defaults to relative `/api` paths. This prevents browser **Mixed Content** blocks when accessing the site via secure `https://your-domain.com`.
-
-### 4. Smart Game Config Parser
-*   Parses Palworld's complex single-line `OptionSettings=(...)` array into a formatted dashboard.
-*   Enables search filters, expandable categories, styled dropdowns/toggles, and provides a raw fallback editor.
+### 3. Dynamic API Routing
+The frontend targets relative `/api` paths.
+*   **In Development**: Vite server maps `/api` requests to `http://localhost:8010` through a built-in reverse proxy configuration.
+*   **In Production**: Cloudflare Tunnels or Nginx simply forward traffic to port `8010`. Since both static files and the API are served on port `8010`, it works perfectly without Mixed Content (HTTP/HTTPS) or HMR WebSocket blocks.
 
 ---
 
@@ -41,15 +35,15 @@ The frontend automatically resolves the API Base URL:
 For production setups (such as Ubuntu Server), a bash utility control script is provided in the root directory.
 
 ### Commands:
-*   **Start**: Compiles the Go binary (if not present) and runs both backend and frontend in the background.
+*   **Start**: Compiles the React frontend into production assets, compiles the Go backend binary, and runs the unified service on port `8010` in the background.
     ```bash
     ./game-manager.sh start
     ```
-*   **Stop**: Stops the services. Includes an **anti-port-locking** feature that actively sweeps and kills orphaned node/Vite parent and child processes holding ports `8010` and `8011` to guarantee a clean state.
+*   **Stop**: Stops the unified service on port `8010`.
     ```bash
     ./game-manager.sh stop
     ```
-*   **Restart**: Restarts both services cleanly.
+*   **Restart**: Restarts the service cleanly.
     ```bash
     ./game-manager.sh restart
     ```
@@ -58,25 +52,36 @@ For production setups (such as Ubuntu Server), a bash utility control script is 
     ./game-manager.sh status
     ```
 
-*   **Logs**: Log outputs are piped directly into `logs/backend.log` and `logs/frontend.log` respectively.
+*   **Logs**: Log outputs are piped directly into `logs/backend.log`.
 
 ---
 
-## Setup & Run (Manual Dev Mode)
+## Setup & Run (Manual Mode)
 
-### 1. Run the Backend
-```bash
-cd backend
-# Set JWT signing secret (Optional: falls back to default with a warning)
-export JWT_SECRET="your_production_secret_key" # Windows: $env:JWT_SECRET="..."
-go run .
-```
-Default admin seeded automatically: **Username**: `admin` | **Password**: `admin123`
+### Development Mode (Both ports)
+1.  **Start Go Backend**:
+    ```bash
+    cd backend
+    go run .
+    ```
+2.  **Start Vite Dev Server**:
+    ```bash
+    cd frontend
+    npm install
+    npm run dev
+    ```
+    Access on [http://localhost:8011](http://localhost:8011)
 
-### 2. Run the Frontend
-```bash
-cd frontend
-npm install
-npm run dev
-```
-Open [http://localhost:8011](http://localhost:8011) in your browser.
+### Production Mode (Single port 8010)
+1.  **Build Frontend**:
+    ```bash
+    cd frontend
+    npm install
+    npm run build
+    ```
+2.  **Run Go Server**:
+    ```bash
+    cd ../backend
+    go run .
+    ```
+    Access on [http://localhost:8010](http://localhost:8010) (both static assets and API are served on this port).

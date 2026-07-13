@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"os"
 	"strings"
 )
 
@@ -45,6 +46,35 @@ func main() {
 
 	mux.HandleFunc("/api/admin/user-profiles", AuthMiddleware(AdminMiddleware(ManageUserProfilesHandler)))
 	mux.HandleFunc("/api/admin/user-profiles/", AuthMiddleware(AdminMiddleware(UnlinkUserProfileHandler)))
+
+	// 3. Serve Frontend Static Files (Vite Production Build)
+	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		if strings.HasPrefix(r.URL.Path, "/api/") {
+			http.NotFound(w, r)
+			return
+		}
+
+		// Check folder location
+		distDir := "../frontend/dist"
+		if _, err := os.Stat(distDir); os.IsNotExist(err) {
+			distDir = "./frontend/dist"
+		}
+
+		path := r.URL.Path
+		if strings.Contains(path, "..") {
+			http.Error(w, "Forbidden", http.StatusForbidden)
+			return
+		}
+
+		// If it's a file request (has file extension), serve the static file
+		if strings.Contains(path, ".") {
+			http.FileServer(http.Dir(distDir)).ServeHTTP(w, r)
+			return
+		}
+
+		// Otherwise fallback to index.html to support React Router SPA navigation
+		http.ServeFile(w, r, distDir+"/index.html")
+	})
 
 	// Global HTTP middleware wrapper for logging and CORS
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
