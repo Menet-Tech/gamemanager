@@ -5,6 +5,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"path/filepath"
 	"strings"
 )
 
@@ -48,16 +49,11 @@ func main() {
 	mux.HandleFunc("/api/admin/user-profiles/", AuthMiddleware(AdminMiddleware(UnlinkUserProfileHandler)))
 
 	// 3. Serve Frontend Static Files (Vite Production Build)
+	distDir := getStaticDir()
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		if strings.HasPrefix(r.URL.Path, "/api/") {
 			http.NotFound(w, r)
 			return
-		}
-
-		// Check folder location
-		distDir := "../frontend/dist"
-		if _, err := os.Stat(distDir); os.IsNotExist(err) {
-			distDir = "./frontend/dist"
 		}
 
 		path := r.URL.Path
@@ -73,7 +69,7 @@ func main() {
 		}
 
 		// Otherwise fallback to index.html to support React Router SPA navigation
-		http.ServeFile(w, r, distDir+"/index.html")
+		http.ServeFile(w, r, filepath.Join(distDir, "index.html"))
 	})
 
 	// Global HTTP middleware wrapper for logging and CORS
@@ -97,4 +93,41 @@ func main() {
 // A simple string helper for routing
 func stringsContains(s, sub string) bool {
 	return strings.Index(s, sub) >= 0
+}
+
+// getStaticDir dynamically finds the frontend/dist folder location in any environment
+func getStaticDir() string {
+	// 1. Try relative to the executable path
+	if exePath, err := os.Executable(); err == nil {
+		exeDir := filepath.Dir(exePath)
+		// Try exeDir + /../frontend/dist (when run inside backend/ directory)
+		path1 := filepath.Join(exeDir, "..", "frontend", "dist")
+		if _, err := os.Stat(path1); err == nil {
+			return path1
+		}
+		// Try exeDir + /frontend/dist (when run from root folder)
+		path2 := filepath.Join(exeDir, "frontend", "dist")
+		if _, err := os.Stat(path2); err == nil {
+			return path2
+		}
+	}
+
+	// 2. Try relative to current working directory
+	if cwd, err := os.Getwd(); err == nil {
+		path1 := filepath.Join(cwd, "..", "frontend", "dist")
+		if _, err := os.Stat(path1); err == nil {
+			return path1
+		}
+		path2 := filepath.Join(cwd, "frontend", "dist")
+		if _, err := os.Stat(path2); err == nil {
+			return path2
+		}
+		path3 := filepath.Join(cwd, "game-Manager", "frontend", "dist")
+		if _, err := os.Stat(path3); err == nil {
+			return path3
+		}
+	}
+
+	// Fallback to default relative path
+	return "../frontend/dist"
 }
