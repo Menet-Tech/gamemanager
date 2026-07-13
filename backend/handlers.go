@@ -964,3 +964,62 @@ func ChangeOwnPasswordHandler(w http.ResponseWriter, r *http.Request) {
 	log.Printf("[SECURITY] User ID %d successfully changed their password", userID)
 	sendJSON(w, http.StatusOK, map[string]string{"message": "password changed successfully"})
 }
+
+// RestartProfileServerHandler executes a manual restart command for a host linked to a game profile
+func RestartProfileServerHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		sendError(w, http.StatusMethodNotAllowed, "method not allowed")
+		return
+	}
+
+	profileID, err := getPathParamID(r, "profiles")
+	if err != nil {
+		sendError(w, http.StatusBadRequest, "invalid profile id")
+		return
+	}
+
+	auth := r.Context().Value("auth").(*AuthContext)
+	userID := GetUserIDFromRequest(r)
+
+	// 1. Verify access
+	allowed, err := hasProfileAccess(userID, auth.Role, profileID)
+	if err != nil {
+		sendError(w, http.StatusInternalServerError, "database error")
+		return
+	}
+	if !allowed {
+		sendError(w, http.StatusForbidden, "forbidden: you do not have access to this game profile")
+		return
+	}
+
+	// 2. Fetch profile and host details
+	_, host, err := getProfileAndHost(profileID)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			sendError(w, http.StatusNotFound, "profile not found")
+		} else {
+			sendError(w, http.StatusInternalServerError, "database error")
+		}
+		return
+	}
+
+	if host == nil {
+		sendError(w, http.StatusBadRequest, "no host server configured for this profile")
+		return
+	}
+
+	if host.RestartCommand == "" {
+		sendError(w, http.StatusBadRequest, "no restart command configured for this host server")
+		return
+	}
+
+	// 3. Execute restart command
+	output, err := ExecuteCommand(host, host.RestartCommand)
+	if err != nil {
+		log.Printf("[ERROR] Manual restart command failed: %v, output: %s", err, output)
+		sendError(w, http.StatusInternalServerError, "failed to restart server: "+err.Error())
+		return
+	}
+
+	sendJSON(w, http.StatusOK, map[string]string{"message": "Server restarted successfully!"})
+}

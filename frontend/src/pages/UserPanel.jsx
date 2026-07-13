@@ -1,11 +1,14 @@
 import React, { useState, useEffect } from 'react';
 import { apiFetch } from '../utils/api';
-import { FileEdit, Server, AlertCircle, Gamepad2 } from 'lucide-react';
+import { FileEdit, Server, AlertCircle, Gamepad2, RefreshCw } from 'lucide-react';
 
 export default function UserPanel({ onEditConfig }) {
   const [profiles, setProfiles] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [restartingId, setRestartingId] = useState(null);
+  const [actionSuccess, setActionSuccess] = useState('');
+  const [actionError, setActionError] = useState('');
 
   useEffect(() => {
     fetchMyProfiles();
@@ -21,6 +24,25 @@ export default function UserPanel({ onEditConfig }) {
       setError(err.message || 'Failed to retrieve your game profiles.');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleRestartServer = async (profile) => {
+    if (!window.confirm(`Are you sure you want to restart the server for "${profile.name}"?`)) return;
+    setRestartingId(profile.id);
+    setActionSuccess('');
+    setActionError('');
+    try {
+      const res = await apiFetch(`/profiles/${profile.id}/restart`, {
+        method: 'POST',
+      });
+      setActionSuccess(res?.message || 'Server restarted successfully!');
+      setTimeout(() => setActionSuccess(''), 5000);
+    } catch (err) {
+      setActionError(err.message || 'Failed to restart server.');
+      setTimeout(() => setActionError(''), 6000);
+    } finally {
+      setRestartingId(null);
     }
   };
 
@@ -44,6 +66,19 @@ export default function UserPanel({ onEditConfig }) {
 
   return (
     <div className="space-y-6">
+      {/* Success/Error Toast Banners */}
+      {actionError && (
+        <div className="flex items-center gap-2 p-4 rounded-xl bg-accent-rose/10 border border-accent-rose/25 text-accent-rose text-sm animate-fade-in">
+          <AlertCircle className="w-5 h-5 shrink-0" />
+          <span>{actionError}</span>
+        </div>
+      )}
+      {actionSuccess && (
+        <div className="flex items-center gap-2 p-4 rounded-xl bg-emerald-600/10 border border-emerald-500/25 text-emerald-400 text-sm animate-fade-in">
+          <RefreshCw className="w-5 h-5 shrink-0" />
+          <span>{actionSuccess}</span>
+        </div>
+      )}
       {profiles.length === 0 ? (
         <div className="text-center py-16 glass rounded-2xl p-8">
           <Gamepad2 className="w-12 h-12 text-slate-600 mx-auto mb-4" />
@@ -86,13 +121,23 @@ export default function UserPanel({ onEditConfig }) {
                 </div>
               </div>
 
-              <button
-                onClick={() => onEditConfig(p)}
-                className="w-full py-2.5 rounded-xl bg-slate-950/60 hover:bg-primary-600 border border-slate-800 hover:border-transparent text-white font-semibold text-sm flex items-center justify-center gap-2 transition-all group-hover:shadow-lg group-hover:shadow-primary-600/10"
-              >
-                <FileEdit className="w-4 h-4" />
-                <span>Edit Configuration</span>
-              </button>
+              <div className="grid grid-cols-2 gap-3 mt-auto">
+                <button
+                  onClick={() => onEditConfig(p)}
+                  className="py-2.5 px-3 rounded-xl bg-slate-950/60 hover:bg-primary-600 border border-slate-800 hover:border-transparent text-white font-semibold text-xs flex items-center justify-center gap-1.5 transition-all group-hover:shadow-lg group-hover:shadow-primary-600/10"
+                >
+                  <FileEdit className="w-3.5 h-3.5" />
+                  <span>Edit Config</span>
+                </button>
+                <button
+                  onClick={() => handleRestartServer(p)}
+                  disabled={restartingId === p.id}
+                  className="py-2.5 px-3 rounded-xl bg-slate-950/60 hover:bg-amber-600 border border-slate-800 hover:border-transparent text-white font-semibold text-xs flex items-center justify-center gap-1.5 transition-all group-hover:shadow-lg group-hover:shadow-amber-600/10 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  <RefreshCw className={`w-3.5 h-3.5 ${restartingId === p.id ? 'animate-spin' : ''}`} />
+                  <span>{restartingId === p.id ? 'Restarting...' : 'Restart Server'}</span>
+                </button>
+              </div>
             </div>
           ))}
         </div>

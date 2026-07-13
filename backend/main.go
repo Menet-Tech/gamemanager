@@ -24,7 +24,13 @@ func main() {
 	mux.HandleFunc("/api/me", AuthMiddleware(GetMeHandler))
 	mux.HandleFunc("/api/me/change-password", AuthMiddleware(ChangeOwnPasswordHandler))
 	mux.HandleFunc("/api/profiles", AuthMiddleware(GetMyProfilesHandler)) // List user's profiles
-	mux.HandleFunc("/api/profiles/", AuthMiddleware(ManageConfigHandler))  // Read/Save config for profile: /api/profiles/{id}/config
+	mux.HandleFunc("/api/profiles/", AuthMiddleware(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodPost && stringsContains(r.URL.Path, "/restart") {
+			RestartProfileServerHandler(w, r)
+		} else {
+			ManageConfigHandler(w, r)
+		}
+	}))
 
 	// Admin Routes (require admin privileges)
 	mux.HandleFunc("/api/admin/users", AuthMiddleware(AdminMiddleware(ManageUsersHandler)))
