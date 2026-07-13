@@ -1,0 +1,24 @@
+# Database
+backend/data.db
+backend/data.db-journal
+
+# Go binaries and builds
+backend/*.exe
+backend/backend
+backend/server
+
+# Node dependency directories
+frontend/node_modules/
+
+# Production build outputs
+frontend/dist/
+frontend/build/
+
+# Local env files
+.env
+.env.local
+.env.*.local
+
+# Operating System files
+.DS_Store
+Thumbs.db
