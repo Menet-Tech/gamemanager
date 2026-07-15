@@ -1300,15 +1300,35 @@ func getLocalBuildID(host *HostServer) (string, error) {
 func parseBuildID(content string) string {
 	lines := strings.Split(content, "\n")
 	for _, line := range lines {
-		if strings.Contains(strings.ToLower(line), "buildid") {
-			var res []rune
-			for _, r := range line {
+		trimmed := strings.TrimSpace(line)
+		if trimmed == "" {
+			continue
+		}
+
+		// 1. Check if the line consists entirely of digits (Format 2: e.g. custom command output)
+		isOnlyDigits := true
+		var digits []rune
+		for _, r := range trimmed {
+			if r >= '0' && r <= '9' {
+				digits = append(digits, r)
+			} else if r != '\r' {
+				isOnlyDigits = false
+			}
+		}
+		if isOnlyDigits && len(digits) > 0 {
+			return string(digits)
+		}
+
+		// 2. Check if the line contains the "buildid" keyword (Format 1: e.g. raw ACF file line)
+		if strings.Contains(strings.ToLower(trimmed), "buildid") {
+			var digits2 []rune
+			for _, r := range trimmed {
 				if r >= '0' && r <= '9' {
-					res = append(res, r)
+					digits2 = append(digits2, r)
 				}
 			}
-			if len(res) > 0 {
-				return string(res)
+			if len(digits2) > 0 {
+				return string(digits2)
 			}
 		}
 	}
