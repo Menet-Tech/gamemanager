@@ -1178,6 +1178,12 @@ func CheckProfileUpdateHandler(w http.ResponseWriter, r *http.Request) {
 		updateAvailable = true
 	}
 
+	// If the server is up to date, make sure the displayed latest version matches
+	// the full local version (e.g. v1.0.1.100619) to avoid displaying partial info.
+	if !updateAvailable && localVersion != "Unknown" {
+		latestVersion = localVersion
+	}
+
 	sendJSON(w, http.StatusOK, map[string]interface{}{
 		"updateAvailable": updateAvailable,
 		"localBuild":      localBuild,
