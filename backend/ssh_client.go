@@ -141,6 +141,10 @@ func ExecuteCommand(host *HostServer, cmdStr string) (string, error) {
 		cmd.Stdout = &stdout
 		cmd.Stderr = &stderr
 
+		if host != nil && host.Password != "" {
+			cmd.Stdin = strings.NewReader(host.Password + "\n")
+		}
+
 		err := cmd.Run()
 		if err != nil {
 			return stdout.String(), fmt.Errorf("local execution failed: %v, stderr: %s", err, stderr.String())
@@ -172,6 +176,9 @@ func ExecuteCommand(host *HostServer, cmdStr string) (string, error) {
 		session.Stdin = strings.NewReader(host.Password + "\n")
 		err = session.Run(finalCmd)
 	} else {
+		if host.Password != "" {
+			session.Stdin = strings.NewReader(host.Password + "\n")
+		}
 		err = session.Run(cmdStr)
 	}
 
