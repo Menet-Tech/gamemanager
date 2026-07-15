@@ -18,6 +18,8 @@ type HostServer struct {
 	Username       string `json:"username"`
 	Password       string `json:"password,omitempty"` // SSH Password
 	RestartCommand string `json:"restartCommand"`
+	VersionCommand string `json:"versionCommand"`
+	UpdateCommand  string `json:"updateCommand"`
 }
 
 // GameProfile represents a game configuration profile

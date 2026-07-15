@@ -7,6 +7,8 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
@@ -353,7 +355,7 @@ func DeleteUserHandler(w http.ResponseWriter, r *http.Request) {
 func ManageHostsHandler(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case http.MethodGet:
-		rows, err := db.Query("SELECT id, name, ip, port, username, restart_command FROM host_servers")
+		rows, err := db.Query("SELECT id, name, ip, port, username, restart_command, version_command, update_command FROM host_servers")
 		if err != nil {
 			sendError(w, http.StatusInternalServerError, "database error")
 			return
@@ -363,9 +365,11 @@ func ManageHostsHandler(w http.ResponseWriter, r *http.Request) {
 		var hosts []HostServer
 		for rows.Next() {
 			var h HostServer
-			var restartCmd sql.NullString
-			if err := rows.Scan(&h.ID, &h.Name, &h.IP, &h.Port, &h.Username, &restartCmd); err == nil {
+			var restartCmd, versionCmd, updateCmd sql.NullString
+			if err := rows.Scan(&h.ID, &h.Name, &h.IP, &h.Port, &h.Username, &restartCmd, &versionCmd, &updateCmd); err == nil {
 				h.RestartCommand = restartCmd.String
+				h.VersionCommand = versionCmd.String
+				h.UpdateCommand = updateCmd.String
 				hosts = append(hosts, h)
 			}
 		}
@@ -391,8 +395,8 @@ func ManageHostsHandler(w http.ResponseWriter, r *http.Request) {
 			h.Port = 22
 		}
 
-		res, err := db.Exec("INSERT INTO host_servers (name, ip, port, username, password, restart_command) VALUES (?, ?, ?, ?, ?, ?)",
-			h.Name, h.IP, h.Port, h.Username, h.Password, h.RestartCommand)
+		res, err := db.Exec("INSERT INTO host_servers (name, ip, port, username, password, restart_command, version_command, update_command) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+			h.Name, h.IP, h.Port, h.Username, h.Password, h.RestartCommand, h.VersionCommand, h.UpdateCommand)
 		if err != nil {
 			sendError(w, http.StatusInternalServerError, "failed to save host server")
 			return
@@ -448,11 +452,11 @@ func HostByIDHandler(w http.ResponseWriter, r *http.Request) {
 		var args []interface{}
 
 		if h.Password != "" {
-			query = "UPDATE host_servers SET name = ?, ip = ?, port = ?, username = ?, password = ?, restart_command = ? WHERE id = ?"
-			args = []interface{}{h.Name, h.IP, h.Port, h.Username, h.Password, h.RestartCommand, id}
+			query = "UPDATE host_servers SET name = ?, ip = ?, port = ?, username = ?, password = ?, restart_command = ?, version_command = ?, update_command = ? WHERE id = ?"
+			args = []interface{}{h.Name, h.IP, h.Port, h.Username, h.Password, h.RestartCommand, h.VersionCommand, h.UpdateCommand, id}
 		} else {
-			query = "UPDATE host_servers SET name = ?, ip = ?, port = ?, username = ?, restart_command = ? WHERE id = ?"
-			args = []interface{}{h.Name, h.IP, h.Port, h.Username, h.RestartCommand, id}
+			query = "UPDATE host_servers SET name = ?, ip = ?, port = ?, username = ?, restart_command = ?, version_command = ?, update_command = ? WHERE id = ?"
+			args = []interface{}{h.Name, h.IP, h.Port, h.Username, h.RestartCommand, h.VersionCommand, h.UpdateCommand, id}
 		}
 
 		_, err = db.Exec(query, args...)
@@ -738,19 +742,19 @@ func getProfileAndHost(profileID int) (*GameProfile, *HostServer, error) {
 	var p GameProfile
 	var h HostServer
 	var hostID sql.NullInt64
-	var hostName, hostIP, hostUser, hostPass, hostRestartCmd sql.NullString
+	var hostName, hostIP, hostUser, hostPass, hostRestartCmd, hostVersionCmd, hostUpdateCmd sql.NullString
 	var hostPort sql.NullInt64
 
 	query := `
 		SELECT p.id, p.name, p.game_type, p.host_id, p.config_path, 
-		       h.id, h.name, h.ip, h.port, h.username, h.password, h.restart_command
+		       h.id, h.name, h.ip, h.port, h.username, h.password, h.restart_command, h.version_command, h.update_command
 		FROM game_profiles p
 		LEFT JOIN host_servers h ON p.host_id = h.id
 		WHERE p.id = ?
 	`
 	err := db.QueryRow(query, profileID).Scan(
 		&p.ID, &p.Name, &p.GameType, &hostID, &p.ConfigPath,
-		&h.ID, &hostName, &hostIP, &hostPort, &hostUser, &hostPass, &hostRestartCmd,
+		&h.ID, &hostName, &hostIP, &hostPort, &hostUser, &hostPass, &hostRestartCmd, &hostVersionCmd, &hostUpdateCmd,
 	)
 	if err != nil {
 		return nil, nil, err
@@ -765,6 +769,8 @@ func getProfileAndHost(profileID int) (*GameProfile, *HostServer, error) {
 		h.Username = hostUser.String
 		h.Password = hostPass.String
 		h.RestartCommand = hostRestartCmd.String
+		h.VersionCommand = hostVersionCmd.String
+		h.UpdateCommand = hostUpdateCmd.String
 		return &p, &h, nil
 	}
 
@@ -1022,4 +1028,275 @@ func RestartProfileServerHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	sendJSON(w, http.StatusOK, map[string]string{"message": "Server restarted successfully!"})
+}
+
+// GetProfileVersionHandler returns the running version of the profile server
+func GetProfileVersionHandler(w http.ResponseWriter, r *http.Request) {
+	if enableCORS(w, r) {
+		return
+	}
+	if r.Method != http.MethodGet {
+		sendError(w, http.StatusMethodNotAllowed, "method not allowed")
+		return
+	}
+
+	profileID, err := getPathParamID(r, "profiles")
+	if err != nil {
+		sendError(w, http.StatusBadRequest, "invalid profile id")
+		return
+	}
+
+	auth := r.Context().Value("auth").(*AuthContext)
+	userID := GetUserIDFromRequest(r)
+
+	allowed, err := hasProfileAccess(userID, auth.Role, profileID)
+	if err != nil {
+		sendError(w, http.StatusInternalServerError, "database error")
+		return
+	}
+	if !allowed {
+		sendError(w, http.StatusForbidden, "forbidden")
+		return
+	}
+
+	_, host, err := getProfileAndHost(profileID)
+	if err != nil {
+		sendError(w, http.StatusInternalServerError, "database error")
+		return
+	}
+
+	if host == nil {
+		host = &HostServer{IP: "localhost"}
+	}
+
+	if host.VersionCommand == "" {
+		sendJSON(w, http.StatusOK, map[string]string{"version": "Version command not configured"})
+		return
+	}
+
+	output, err := ExecuteCommand(host, host.VersionCommand)
+	if err != nil {
+		sendJSON(w, http.StatusOK, map[string]string{"version": "Failed to run version command"})
+		return
+	}
+
+	version := parseVersion(output)
+	sendJSON(w, http.StatusOK, map[string]string{"version": version})
+}
+
+// CheckProfileUpdateHandler checks if a game server update is available
+func CheckProfileUpdateHandler(w http.ResponseWriter, r *http.Request) {
+	if enableCORS(w, r) {
+		return
+	}
+	if r.Method != http.MethodGet {
+		sendError(w, http.StatusMethodNotAllowed, "method not allowed")
+		return
+	}
+
+	profileID, err := getPathParamID(r, "profiles")
+	if err != nil {
+		sendError(w, http.StatusBadRequest, "invalid profile id")
+		return
+	}
+
+	auth := r.Context().Value("auth").(*AuthContext)
+	userID := GetUserIDFromRequest(r)
+
+	allowed, err := hasProfileAccess(userID, auth.Role, profileID)
+	if err != nil {
+		sendError(w, http.StatusInternalServerError, "database error")
+		return
+	}
+	if !allowed {
+		sendError(w, http.StatusForbidden, "forbidden")
+		return
+	}
+
+	_, host, err := getProfileAndHost(profileID)
+	if err != nil {
+		sendError(w, http.StatusInternalServerError, "database error")
+		return
+	}
+
+	if host == nil {
+		host = &HostServer{IP: "localhost"}
+	}
+
+	// 1. Fetch latest build ID from SteamCMD API
+	latestBuild := "Unknown"
+	client := &http.Client{Timeout: 5 * time.Second}
+	resp, err := client.Get("https://api.steamcmd.net/v1/info/2394010")
+	if err == nil {
+		defer resp.Body.Close()
+		var steamInfo SteamCMDInfo
+		if err := json.NewDecoder(resp.Body).Decode(&steamInfo); err == nil {
+			if data, ok := steamInfo.Data["2394010"]; ok {
+				latestBuild = data.Depots.Branches.Public.BuildID
+			}
+		}
+	}
+
+	// 2. Fetch local build ID from server
+	localBuild, err := getLocalBuildID(host)
+	if err != nil {
+		log.Printf("[INFO] Could not retrieve local build ID: %v", err)
+		localBuild = "Unknown"
+	}
+
+	updateAvailable := false
+	if latestBuild != "Unknown" && localBuild != "Unknown" && latestBuild != localBuild {
+		updateAvailable = true
+	} else if latestBuild != "Unknown" && localBuild == "Unknown" {
+		// If we can't find local manifest, assume we can check or prompt anyway
+		updateAvailable = true
+	}
+
+	sendJSON(w, http.StatusOK, map[string]interface{}{
+		"updateAvailable": updateAvailable,
+		"localBuild":      localBuild,
+		"latestBuild":     latestBuild,
+	})
+}
+
+// UpdateProfileServerHandler runs the update command on the host
+func UpdateProfileServerHandler(w http.ResponseWriter, r *http.Request) {
+	if enableCORS(w, r) {
+		return
+	}
+	if r.Method != http.MethodPost {
+		sendError(w, http.StatusMethodNotAllowed, "method not allowed")
+		return
+	}
+
+	profileID, err := getPathParamID(r, "profiles")
+	if err != nil {
+		sendError(w, http.StatusBadRequest, "invalid profile id")
+		return
+	}
+
+	auth := r.Context().Value("auth").(*AuthContext)
+	userID := GetUserIDFromRequest(r)
+
+	allowed, err := hasProfileAccess(userID, auth.Role, profileID)
+	if err != nil {
+		sendError(w, http.StatusInternalServerError, "database error")
+		return
+	}
+	if !allowed {
+		sendError(w, http.StatusForbidden, "forbidden")
+		return
+	}
+
+	_, host, err := getProfileAndHost(profileID)
+	if err != nil {
+		sendError(w, http.StatusInternalServerError, "database error")
+		return
+	}
+
+	if host == nil {
+		host = &HostServer{IP: "localhost"}
+	}
+
+	if host.UpdateCommand == "" {
+		sendError(w, http.StatusBadRequest, "Update command not configured for this server")
+		return
+	}
+
+	// Run update synchronously
+	log.Printf("[INFO] Running update for profile %d using command: %s", profileID, host.UpdateCommand)
+	output, err := ExecuteCommand(host, host.UpdateCommand)
+	if err != nil {
+		log.Printf("[ERROR] Server update failed: %v, output: %s", err, output)
+		sendError(w, http.StatusInternalServerError, "Failed to update server: "+err.Error())
+		return
+	}
+
+	sendJSON(w, http.StatusOK, map[string]string{"message": "Server updated successfully!"})
+}
+
+type SteamCMDInfo struct {
+	Data map[string]struct {
+		Depots struct {
+			Branches struct {
+				Public struct {
+					BuildID string `json:"buildid"`
+				} `json:"public"`
+			} `json:"branches"`
+		} `json:"depots"`
+	} `json:"data"`
+}
+
+func parseVersion(output string) string {
+	lines := strings.Split(output, "\n")
+	for _, line := range lines {
+		idx := strings.Index(strings.ToLower(line), "game version is")
+		if idx >= 0 {
+			ver := line[idx:]
+			return strings.TrimSpace(ver)
+		}
+	}
+	for i := len(lines) - 1; i >= 0; i-- {
+		trimmed := strings.TrimSpace(lines[i])
+		if trimmed != "" {
+			if len(trimmed) > 50 {
+				return trimmed[:50] + "..."
+			}
+			return trimmed
+		}
+	}
+	return "Unknown"
+}
+
+func getLocalBuildID(host *HostServer) (string, error) {
+	if isLocal(host) {
+		paths := []string{
+			"C:\\steamcmd\\steamapps\\appmanifest_2394010.acf",
+			"C:\\Program Files (x86)\\Steam\\steamapps\\appmanifest_2394010.acf",
+		}
+		if home, err := os.UserHomeDir(); err == nil {
+			paths = append(paths, filepath.Join(home, "Steam", "steamapps", "appmanifest_2394010.acf"))
+			paths = append(paths, filepath.Join(home, ".steam", "steam", "steamapps", "appmanifest_2394010.acf"))
+			paths = append(paths, filepath.Join(home, "steamcmd", "steamapps", "appmanifest_2394010.acf"))
+		}
+		for _, p := range paths {
+			if _, err := os.Stat(p); err == nil {
+				content, err := os.ReadFile(p)
+				if err == nil {
+					return parseBuildID(string(content)), nil
+				}
+			}
+		}
+	}
+
+	cmd := "find /home/steam /home /opt ~ -name appmanifest_2394010.acf 2>/dev/null | head -n 1 | xargs grep buildid"
+	output, err := ExecuteCommand(host, cmd)
+	if err != nil || output == "" {
+		cmd = "find / -name appmanifest_2394010.acf 2>/dev/null | head -n 1 | xargs grep buildid"
+		output, _ = ExecuteCommand(host, cmd)
+	}
+
+	if output != "" {
+		return parseBuildID(output), nil
+	}
+
+	return "", fmt.Errorf("local appmanifest not found")
+}
+
+func parseBuildID(content string) string {
+	lines := strings.Split(content, "\n")
+	for _, line := range lines {
+		if strings.Contains(strings.ToLower(line), "buildid") {
+			var res []rune
+			for _, r := range line {
+				if r >= '0' && r <= '9' {
+					res = append(res, r)
+				}
+			}
+			if len(res) > 0 {
+				return string(res)
+			}
+		}
+	}
+	return ""
 }

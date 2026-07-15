@@ -43,6 +43,8 @@ export default function AdminPanel({ section }) {
   const [hostUsername, setHostUsername] = useState('');
   const [hostPassword, setHostPassword] = useState('');
   const [hostRestartCommand, setHostRestartCommand] = useState('');
+  const [hostVersionCommand, setHostVersionCommand] = useState('');
+  const [hostUpdateCommand, setHostUpdateCommand] = useState('');
 
   // Form states - Profiles
   const [profileName, setProfileName] = useState('');
@@ -180,7 +182,9 @@ export default function AdminPanel({ section }) {
           port: parseInt(hostPort) || 22,
           username: hostUsername,
           password: hostPassword,
-          restartCommand: hostRestartCommand
+          restartCommand: hostRestartCommand,
+          versionCommand: hostVersionCommand,
+          updateCommand: hostUpdateCommand
         }),
       });
       setHostName('');
@@ -189,6 +193,8 @@ export default function AdminPanel({ section }) {
       setHostUsername('');
       setHostPassword('');
       setHostRestartCommand('');
+      setHostVersionCommand('');
+      setHostUpdateCommand('');
       showSuccessMessage('Host server added!');
       fetchData();
     } catch (err) {
@@ -258,6 +264,8 @@ export default function AdminPanel({ section }) {
     setHostUsername(host.username || '');
     setHostPassword('');
     setHostRestartCommand(host.restartCommand || '');
+    setHostVersionCommand(host.versionCommand || '');
+    setHostUpdateCommand(host.updateCommand || '');
   };
 
   const handleEditHost = async (e) => {
@@ -272,7 +280,9 @@ export default function AdminPanel({ section }) {
           port: parseInt(hostPort) || 22,
           username: hostUsername,
           password: hostPassword,
-          restartCommand: hostRestartCommand
+          restartCommand: hostRestartCommand,
+          versionCommand: hostVersionCommand,
+          updateCommand: hostUpdateCommand
         }),
       });
       setEditingHost(null);
@@ -282,6 +292,8 @@ export default function AdminPanel({ section }) {
       setHostUsername('');
       setHostPassword('');
       setHostRestartCommand('');
+      setHostVersionCommand('');
+      setHostUpdateCommand('');
       showSuccessMessage('Host server updated successfully!');
       fetchData();
     } catch (err) {
@@ -533,6 +545,26 @@ export default function AdminPanel({ section }) {
                   value={hostRestartCommand}
                   onChange={(e) => setHostRestartCommand(e.target.value)}
                   placeholder="e.g. systemctl restart palworld"
+                  className="w-full px-4 py-2.5 rounded-xl bg-slate-950/40 border border-slate-800 text-white text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 transition-all"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-slate-400 mb-1.5 ml-1">Version Check Command (optional)</label>
+                <input
+                  type="text"
+                  value={hostVersionCommand}
+                  onChange={(e) => setHostVersionCommand(e.target.value)}
+                  placeholder="e.g. systemctl status palserver | grep 'Game version is'"
+                  className="w-full px-4 py-2.5 rounded-xl bg-slate-950/40 border border-slate-800 text-white text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 transition-all"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-slate-400 mb-1.5 ml-1">Update Command (optional)</label>
+                <input
+                  type="text"
+                  value={hostUpdateCommand}
+                  onChange={(e) => setHostUpdateCommand(e.target.value)}
+                  placeholder="e.g. steamcmd +login anonymous +app_update 2394010 validate +quit"
                   className="w-full px-4 py-2.5 rounded-xl bg-slate-950/40 border border-slate-800 text-white text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 transition-all"
                 />
               </div>
@@ -922,6 +954,8 @@ export default function AdminPanel({ section }) {
                   setHostUsername('');
                   setHostPassword('');
                   setHostRestartCommand('');
+                  setHostVersionCommand('');
+                  setHostUpdateCommand('');
                 }}
                 className="text-slate-500 hover:text-white"
               >
@@ -990,6 +1024,26 @@ export default function AdminPanel({ section }) {
                   className="w-full px-4 py-2.5 rounded-xl bg-slate-950/50 border border-slate-800 text-white text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 transition-all"
                 />
               </div>
+              <div>
+                <label className="block text-xs font-semibold text-slate-400 mb-1.5">Version Check Command (optional)</label>
+                <input
+                  type="text"
+                  value={hostVersionCommand}
+                  onChange={(e) => setHostVersionCommand(e.target.value)}
+                  placeholder="e.g. systemctl status palserver | grep 'Game version is'"
+                  className="w-full px-4 py-2.5 rounded-xl bg-slate-950/50 border border-slate-800 text-white text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 transition-all"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-slate-400 mb-1.5">Update Command (optional)</label>
+                <input
+                  type="text"
+                  value={hostUpdateCommand}
+                  onChange={(e) => setHostUpdateCommand(e.target.value)}
+                  placeholder="e.g. steamcmd +login anonymous +app_update 2394010 validate +quit"
+                  className="w-full px-4 py-2.5 rounded-xl bg-slate-950/50 border border-slate-800 text-white text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 transition-all"
+                />
+              </div>
               <div className="flex justify-end gap-3 mt-6">
                 <button
                   type="button"
@@ -1001,6 +1055,8 @@ export default function AdminPanel({ section }) {
                     setHostUsername('');
                     setHostPassword('');
                     setHostRestartCommand('');
+                    setHostVersionCommand('');
+                    setHostUpdateCommand('');
                   }}
                   className="px-4 py-2 rounded-xl text-slate-400 hover:text-white hover:bg-slate-800 transition-all text-sm font-semibold"
                 >

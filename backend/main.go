@@ -27,6 +27,12 @@ func main() {
 	mux.HandleFunc("/api/profiles/", AuthMiddleware(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPost && stringsContains(r.URL.Path, "/restart") {
 			RestartProfileServerHandler(w, r)
+		} else if r.Method == http.MethodGet && stringsContains(r.URL.Path, "/version") {
+			GetProfileVersionHandler(w, r)
+		} else if r.Method == http.MethodGet && stringsContains(r.URL.Path, "/check-update") {
+			CheckProfileUpdateHandler(w, r)
+		} else if r.Method == http.MethodPost && stringsContains(r.URL.Path, "/update") {
+			UpdateProfileServerHandler(w, r)
 		} else {
 			ManageConfigHandler(w, r)
 		}
