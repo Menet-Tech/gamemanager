@@ -11,15 +11,16 @@ type User struct {
 
 // HostServer represents a server where games are hosted
 type HostServer struct {
-	ID             int    `json:"id"`
-	Name           string `json:"name"`
-	IP             string `json:"ip"`
-	Port           int    `json:"port"`
-	Username       string `json:"username"`
-	Password       string `json:"password,omitempty"` // SSH Password
-	RestartCommand string `json:"restartCommand"`
-	VersionCommand string `json:"versionCommand"`
-	UpdateCommand  string `json:"updateCommand"`
+	ID                int    `json:"id"`
+	Name              string `json:"name"`
+	IP                string `json:"ip"`
+	Port              int    `json:"port"`
+	Username          string `json:"username"`
+	Password          string `json:"password,omitempty"` // SSH Password
+	RestartCommand    string `json:"restartCommand"`
+	VersionCommand    string `json:"versionCommand"`
+	UpdateCommand     string `json:"updateCommand"`
+	LocalBuildCommand string `json:"localBuildCommand"`
 }
 
 // GameProfile represents a game configuration profile

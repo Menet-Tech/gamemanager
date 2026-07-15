@@ -355,7 +355,7 @@ func DeleteUserHandler(w http.ResponseWriter, r *http.Request) {
 func ManageHostsHandler(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case http.MethodGet:
-		rows, err := db.Query("SELECT id, name, ip, port, username, restart_command, version_command, update_command FROM host_servers")
+		rows, err := db.Query("SELECT id, name, ip, port, username, restart_command, version_command, update_command, local_build_command FROM host_servers")
 		if err != nil {
 			sendError(w, http.StatusInternalServerError, "database error")
 			return
@@ -365,11 +365,12 @@ func ManageHostsHandler(w http.ResponseWriter, r *http.Request) {
 		var hosts []HostServer
 		for rows.Next() {
 			var h HostServer
-			var restartCmd, versionCmd, updateCmd sql.NullString
-			if err := rows.Scan(&h.ID, &h.Name, &h.IP, &h.Port, &h.Username, &restartCmd, &versionCmd, &updateCmd); err == nil {
+			var restartCmd, versionCmd, updateCmd, localBuildCmd sql.NullString
+			if err := rows.Scan(&h.ID, &h.Name, &h.IP, &h.Port, &h.Username, &restartCmd, &versionCmd, &updateCmd, &localBuildCmd); err == nil {
 				h.RestartCommand = restartCmd.String
 				h.VersionCommand = versionCmd.String
 				h.UpdateCommand = updateCmd.String
+				h.LocalBuildCommand = localBuildCmd.String
 				hosts = append(hosts, h)
 			}
 		}
@@ -395,8 +396,8 @@ func ManageHostsHandler(w http.ResponseWriter, r *http.Request) {
 			h.Port = 22
 		}
 
-		res, err := db.Exec("INSERT INTO host_servers (name, ip, port, username, password, restart_command, version_command, update_command) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-			h.Name, h.IP, h.Port, h.Username, h.Password, h.RestartCommand, h.VersionCommand, h.UpdateCommand)
+		res, err := db.Exec("INSERT INTO host_servers (name, ip, port, username, password, restart_command, version_command, update_command, local_build_command) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+			h.Name, h.IP, h.Port, h.Username, h.Password, h.RestartCommand, h.VersionCommand, h.UpdateCommand, h.LocalBuildCommand)
 		if err != nil {
 			sendError(w, http.StatusInternalServerError, "failed to save host server")
 			return
@@ -452,11 +453,11 @@ func HostByIDHandler(w http.ResponseWriter, r *http.Request) {
 		var args []interface{}
 
 		if h.Password != "" {
-			query = "UPDATE host_servers SET name = ?, ip = ?, port = ?, username = ?, password = ?, restart_command = ?, version_command = ?, update_command = ? WHERE id = ?"
-			args = []interface{}{h.Name, h.IP, h.Port, h.Username, h.Password, h.RestartCommand, h.VersionCommand, h.UpdateCommand, id}
+			query = "UPDATE host_servers SET name = ?, ip = ?, port = ?, username = ?, password = ?, restart_command = ?, version_command = ?, update_command = ?, local_build_command = ? WHERE id = ?"
+			args = []interface{}{h.Name, h.IP, h.Port, h.Username, h.Password, h.RestartCommand, h.VersionCommand, h.UpdateCommand, h.LocalBuildCommand, id}
 		} else {
-			query = "UPDATE host_servers SET name = ?, ip = ?, port = ?, username = ?, restart_command = ?, version_command = ?, update_command = ? WHERE id = ?"
-			args = []interface{}{h.Name, h.IP, h.Port, h.Username, h.RestartCommand, h.VersionCommand, h.UpdateCommand, id}
+			query = "UPDATE host_servers SET name = ?, ip = ?, port = ?, username = ?, restart_command = ?, version_command = ?, update_command = ?, local_build_command = ? WHERE id = ?"
+			args = []interface{}{h.Name, h.IP, h.Port, h.Username, h.RestartCommand, h.VersionCommand, h.UpdateCommand, h.LocalBuildCommand, id}
 		}
 
 		_, err = db.Exec(query, args...)
@@ -742,19 +743,19 @@ func getProfileAndHost(profileID int) (*GameProfile, *HostServer, error) {
 	var p GameProfile
 	var h HostServer
 	var hostID sql.NullInt64
-	var hostName, hostIP, hostUser, hostPass, hostRestartCmd, hostVersionCmd, hostUpdateCmd sql.NullString
+	var hostName, hostIP, hostUser, hostPass, hostRestartCmd, hostVersionCmd, hostUpdateCmd, hostLocalBuildCmd sql.NullString
 	var hostPort sql.NullInt64
 
 	query := `
 		SELECT p.id, p.name, p.game_type, p.host_id, p.config_path, 
-		       h.id, h.name, h.ip, h.port, h.username, h.password, h.restart_command, h.version_command, h.update_command
+		       h.id, h.name, h.ip, h.port, h.username, h.password, h.restart_command, h.version_command, h.update_command, h.local_build_command
 		FROM game_profiles p
 		LEFT JOIN host_servers h ON p.host_id = h.id
 		WHERE p.id = ?
 	`
 	err := db.QueryRow(query, profileID).Scan(
 		&p.ID, &p.Name, &p.GameType, &hostID, &p.ConfigPath,
-		&h.ID, &hostName, &hostIP, &hostPort, &hostUser, &hostPass, &hostRestartCmd, &hostVersionCmd, &hostUpdateCmd,
+		&h.ID, &hostName, &hostIP, &hostPort, &hostUser, &hostPass, &hostRestartCmd, &hostVersionCmd, &hostUpdateCmd, &hostLocalBuildCmd,
 	)
 	if err != nil {
 		return nil, nil, err
@@ -771,6 +772,7 @@ func getProfileAndHost(profileID int) (*GameProfile, *HostServer, error) {
 		h.RestartCommand = hostRestartCmd.String
 		h.VersionCommand = hostVersionCmd.String
 		h.UpdateCommand = hostUpdateCmd.String
+		h.LocalBuildCommand = hostLocalBuildCmd.String
 		return &p, &h, nil
 	}
 
@@ -1250,6 +1252,17 @@ func parseVersion(output string) string {
 }
 
 func getLocalBuildID(host *HostServer) (string, error) {
+	if host != nil && host.LocalBuildCommand != "" {
+		output, err := ExecuteCommand(host, host.LocalBuildCommand)
+		if err != nil {
+			return "", fmt.Errorf("failed to run custom local build command: %v", err)
+		}
+		if output != "" {
+			return parseBuildID(output), nil
+		}
+		return "", fmt.Errorf("custom local build command returned empty output")
+	}
+
 	if isLocal(host) {
 		paths := []string{
 			"C:\\steamcmd\\steamapps\\appmanifest_2394010.acf",

@@ -36,7 +36,8 @@ func initDB() {
 			password TEXT,
 			restart_command TEXT,
 			version_command TEXT,
-			update_command TEXT
+			update_command TEXT,
+			local_build_command TEXT
 		);`,
 		`CREATE TABLE IF NOT EXISTS game_profiles (
 			id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -67,6 +68,7 @@ func initDB() {
 	_, _ = db.Exec("ALTER TABLE host_servers ADD COLUMN restart_command TEXT")
 	_, _ = db.Exec("ALTER TABLE host_servers ADD COLUMN version_command TEXT")
 	_, _ = db.Exec("ALTER TABLE host_servers ADD COLUMN update_command TEXT")
+	_, _ = db.Exec("ALTER TABLE host_servers ADD COLUMN local_build_command TEXT")
 
 	// Insert default admin if no users exist
 	var count int
