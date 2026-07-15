@@ -76,6 +76,8 @@ export default function UserPanel({ onEditConfig }) {
         profile,
         localBuild: res.localBuild,
         latestBuild: res.latestBuild,
+        localVersion: res.localVersion,
+        latestVersion: res.latestVersion,
         updateAvailable: res.updateAvailable
       });
     } catch (err) {
@@ -263,12 +265,18 @@ export default function UserPanel({ onEditConfig }) {
 
               <div className="grid grid-cols-2 gap-4 bg-slate-950/40 p-3.5 rounded-xl border border-slate-850">
                 <div>
-                  <span className="text-[10px] text-slate-500 font-semibold block uppercase tracking-wider">Local Build ID</span>
-                  <span className="text-sm font-mono text-slate-300 font-bold">{updateModal.localBuild}</span>
+                  <span className="text-[10px] text-slate-500 font-semibold block mb-0.5 uppercase tracking-wider">Versi Saat Ini</span>
+                  <span className="text-sm text-slate-300 font-bold block truncate" title={updateModal.localVersion}>
+                    {updateModal.localVersion !== 'Unknown' ? updateModal.localVersion.replace('Game version is ', '') : 'Unknown'}
+                  </span>
+                  <span className="text-[9px] text-slate-500 block font-mono">Build: {updateModal.localBuild}</span>
                 </div>
                 <div>
-                  <span className="text-[10px] text-slate-500 font-semibold block uppercase tracking-wider">Latest Build ID</span>
-                  <span className="text-sm font-mono text-emerald-400 font-bold">{updateModal.latestBuild}</span>
+                  <span className="text-[10px] text-slate-500 font-semibold block mb-0.5 uppercase tracking-wider">Versi Terbaru</span>
+                  <span className="text-sm text-emerald-400 font-bold block truncate" title={updateModal.latestVersion}>
+                    {updateModal.latestVersion !== 'Unknown' ? updateModal.latestVersion : 'Unknown'}
+                  </span>
+                  <span className="text-[9px] text-slate-500 block font-mono">Build: {updateModal.latestBuild}</span>
                 </div>
               </div>
 

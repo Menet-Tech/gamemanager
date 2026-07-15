@@ -1145,6 +1145,31 @@ func CheckProfileUpdateHandler(w http.ResponseWriter, r *http.Request) {
 		localBuild = "Unknown"
 	}
 
+	// 3. Fetch local running version of the server
+	localVersion := "Unknown"
+	if host.VersionCommand != "" {
+		if verOutput, verErr := ExecuteCommand(host, host.VersionCommand); verErr == nil {
+			localVersion = parseVersion(verOutput)
+		}
+	}
+
+	// 4. Fetch latest version from Steam News API
+	latestVersion := "Unknown"
+	newsResp, newsErr := client.Get("https://api.steampowered.com/ISteamNews/GetNewsForApp/v2/?appid=1623730&count=5")
+	if newsErr == nil {
+		defer newsResp.Body.Close()
+		var steamNews SteamNewsResponse
+		if err := json.NewDecoder(newsResp.Body).Decode(&steamNews); err == nil {
+			for _, item := range steamNews.AppNews.NewsItems {
+				ver := extractVersionFromTitle(item.Title)
+				if ver != "" {
+					latestVersion = ver
+					break
+				}
+			}
+		}
+	}
+
 	updateAvailable := false
 	if latestBuild != "Unknown" && localBuild != "Unknown" && latestBuild != localBuild {
 		updateAvailable = true
@@ -1157,6 +1182,8 @@ func CheckProfileUpdateHandler(w http.ResponseWriter, r *http.Request) {
 		"updateAvailable": updateAvailable,
 		"localBuild":      localBuild,
 		"latestBuild":     latestBuild,
+		"localVersion":    localVersion,
+		"latestVersion":   latestVersion,
 	})
 }
 
@@ -1296,6 +1323,36 @@ func parseBuildID(content string) string {
 			}
 			if len(res) > 0 {
 				return string(res)
+			}
+		}
+	}
+	return ""
+}
+
+type SteamNewsResponse struct {
+	AppNews struct {
+		NewsItems []struct {
+			Title string   `json:"title"`
+			Tags  []string `json:"tags"`
+		} `json:"newsitems"`
+	} `json:"appnews"`
+}
+
+func extractVersionFromTitle(title string) string {
+	titleLower := strings.ToLower(title)
+	for i := 0; i < len(titleLower)-1; i++ {
+		if titleLower[i] == 'v' && titleLower[i+1] >= '0' && titleLower[i+1] <= '9' {
+			var ver []rune
+			for _, r := range title[i:] {
+				if (r >= '0' && r <= '9') || r == '.' || r == 'v' || r == 'V' {
+					ver = append(ver, r)
+				} else {
+					break
+				}
+			}
+			vStr := strings.TrimSuffix(string(ver), ".")
+			if len(vStr) > 2 {
+				return vStr
 			}
 		}
 	}
