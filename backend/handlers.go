@@ -480,7 +480,7 @@ func ManageProfilesHandler(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case http.MethodGet:
 		query := `
-			SELECT p.id, p.name, p.game_type, p.host_id, p.config_path, h.name as host_name
+			SELECT p.id, p.name, p.game_type, p.host_id, p.config_path, p.steam_app_id, h.name as host_name
 			FROM game_profiles p
 			LEFT JOIN host_servers h ON p.host_id = h.id
 		`
@@ -495,12 +495,14 @@ func ManageProfilesHandler(w http.ResponseWriter, r *http.Request) {
 		for rows.Next() {
 			var p GameProfile
 			var hostName sql.NullString
-			if err := rows.Scan(&p.ID, &p.Name, &p.GameType, &p.HostID, &p.ConfigPath, &hostName); err == nil {
+			var steamAppID sql.NullInt64
+			if err := rows.Scan(&p.ID, &p.Name, &p.GameType, &p.HostID, &p.ConfigPath, &steamAppID, &hostName); err == nil {
 				if hostName.Valid {
 					p.HostName = hostName.String
 				} else {
 					p.HostName = "Local System"
 				}
+				p.SteamAppID = int(steamAppID.Int64)
 				profiles = append(profiles, p)
 			}
 		}
@@ -518,8 +520,8 @@ func ManageProfilesHandler(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		res, err := db.Exec("INSERT INTO game_profiles (name, game_type, host_id, config_path) VALUES (?, ?, ?, ?)",
-			p.Name, p.GameType, p.HostID, p.ConfigPath)
+		res, err := db.Exec("INSERT INTO game_profiles (name, game_type, host_id, config_path, steam_app_id) VALUES (?, ?, ?, ?, ?)",
+			p.Name, p.GameType, p.HostID, p.ConfigPath, p.SteamAppID)
 		if err != nil {
 			sendError(w, http.StatusInternalServerError, "failed to save game profile")
 			return
@@ -562,8 +564,8 @@ func ProfileByIDHandler(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		_, err = db.Exec("UPDATE game_profiles SET name = ?, game_type = ?, host_id = ?, config_path = ? WHERE id = ?",
-			p.Name, p.GameType, p.HostID, p.ConfigPath, id)
+		_, err = db.Exec("UPDATE game_profiles SET name = ?, game_type = ?, host_id = ?, config_path = ?, steam_app_id = ? WHERE id = ?",
+			p.Name, p.GameType, p.HostID, p.ConfigPath, p.SteamAppID, id)
 		if err != nil {
 			sendError(w, http.StatusInternalServerError, "failed to update game profile")
 			return
@@ -685,14 +687,14 @@ func GetMyProfilesHandler(w http.ResponseWriter, r *http.Request) {
 	if auth.Role == "admin" {
 		// Admins can see all profiles
 		query = `
-			SELECT p.id, p.name, p.game_type, p.host_id, p.config_path, h.name as host_name
+			SELECT p.id, p.name, p.game_type, p.host_id, p.config_path, p.steam_app_id, h.name as host_name
 			FROM game_profiles p
 			LEFT JOIN host_servers h ON p.host_id = h.id
 		`
 	} else {
 		// Users can only see assigned profiles
 		query = `
-			SELECT p.id, p.name, p.game_type, p.host_id, p.config_path, h.name as host_name
+			SELECT p.id, p.name, p.game_type, p.host_id, p.config_path, p.steam_app_id, h.name as host_name
 			FROM game_profiles p
 			JOIN user_profiles up ON p.id = up.profile_id
 			LEFT JOIN host_servers h ON p.host_id = h.id
@@ -712,12 +714,14 @@ func GetMyProfilesHandler(w http.ResponseWriter, r *http.Request) {
 	for rows.Next() {
 		var p GameProfile
 		var hostName sql.NullString
-		if err := rows.Scan(&p.ID, &p.Name, &p.GameType, &p.HostID, &p.ConfigPath, &hostName); err == nil {
+		var steamAppID sql.NullInt64
+		if err := rows.Scan(&p.ID, &p.Name, &p.GameType, &p.HostID, &p.ConfigPath, &steamAppID, &hostName); err == nil {
 			if hostName.Valid {
 				p.HostName = hostName.String
 			} else {
 				p.HostName = "Local System"
 			}
+			p.SteamAppID = int(steamAppID.Int64)
 			profiles = append(profiles, p)
 		}
 	}
@@ -744,21 +748,24 @@ func getProfileAndHost(profileID int) (*GameProfile, *HostServer, error) {
 	var hostID sql.NullInt64
 	var hostName, hostIP, hostUser, hostPass, hostRestartCmd, hostVersionCmd, hostUpdateCmd sql.NullString
 	var hostPort sql.NullInt64
+	var steamAppID sql.NullInt64
 
 	query := `
-		SELECT p.id, p.name, p.game_type, p.host_id, p.config_path, 
+		SELECT p.id, p.name, p.game_type, p.host_id, p.config_path, p.steam_app_id,
 		       h.id, h.name, h.ip, h.port, h.username, h.password, h.restart_command, h.version_command, h.update_command
 		FROM game_profiles p
 		LEFT JOIN host_servers h ON p.host_id = h.id
 		WHERE p.id = ?
 	`
 	err := db.QueryRow(query, profileID).Scan(
-		&p.ID, &p.Name, &p.GameType, &hostID, &p.ConfigPath,
+		&p.ID, &p.Name, &p.GameType, &hostID, &p.ConfigPath, &steamAppID,
 		&h.ID, &hostName, &hostIP, &hostPort, &hostUser, &hostPass, &hostRestartCmd, &hostVersionCmd, &hostUpdateCmd,
 	)
 	if err != nil {
 		return nil, nil, err
 	}
+
+	p.SteamAppID = int(steamAppID.Int64)
 
 	if hostID.Valid {
 		p.HostID = int(hostID.Int64)
@@ -1114,9 +1121,20 @@ func CheckProfileUpdateHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	_, host, err := getProfileAndHost(profileID)
+	profile, host, err := getProfileAndHost(profileID)
 	if err != nil {
 		sendError(w, http.StatusInternalServerError, "database error")
+		return
+	}
+
+	if profile.SteamAppID <= 0 {
+		sendJSON(w, http.StatusOK, map[string]interface{}{
+			"updateAvailable": false,
+			"localBuild":      "N/A",
+			"latestBuild":     "N/A",
+			"localVersion":    "N/A",
+			"latestVersion":   "N/A",
+		})
 		return
 	}
 
@@ -1124,22 +1142,23 @@ func CheckProfileUpdateHandler(w http.ResponseWriter, r *http.Request) {
 		host = &HostServer{IP: "localhost"}
 	}
 
-	// 1. Fetch latest build ID from SteamCMD API
+	// 1. Fetch latest build ID from SteamCMD API dynamically
 	latestBuild := "Unknown"
 	client := &http.Client{Timeout: 5 * time.Second}
-	resp, err := client.Get("https://api.steamcmd.net/v1/info/2394010")
+	resp, err := client.Get(fmt.Sprintf("https://api.steamcmd.net/v1/info/%d", profile.SteamAppID))
 	if err == nil {
 		defer resp.Body.Close()
 		var steamInfo SteamCMDInfo
 		if err := json.NewDecoder(resp.Body).Decode(&steamInfo); err == nil {
-			if data, ok := steamInfo.Data["2394010"]; ok {
+			appKey := fmt.Sprintf("%d", profile.SteamAppID)
+			if data, ok := steamInfo.Data[appKey]; ok {
 				latestBuild = data.Depots.Branches.Public.BuildID
 			}
 		}
 	}
 
-	// 2. Fetch local build ID from server
-	localBuild, err := getLocalBuildID(host)
+	// 2. Fetch local build ID from server dynamically
+	localBuild, err := getLocalBuildID(host, profile.SteamAppID)
 	if err != nil {
 		log.Printf("[INFO] Could not retrieve local build ID: %v", err)
 		localBuild = "Unknown"
@@ -1155,7 +1174,11 @@ func CheckProfileUpdateHandler(w http.ResponseWriter, r *http.Request) {
 
 	// 4. Fetch latest version from Steam News API
 	latestVersion := "Unknown"
-	newsResp, newsErr := client.Get("https://api.steampowered.com/ISteamNews/GetNewsForApp/v2/?appid=1623730&count=5")
+	newsAppID := profile.SteamAppID
+	if newsAppID == 2394010 { // Special case: Palworld Dedicated Server -> query Palworld client App ID
+		newsAppID = 1623730
+	}
+	newsResp, newsErr := client.Get(fmt.Sprintf("https://api.steampowered.com/ISteamNews/GetNewsForApp/v2/?appid=%d&count=5", newsAppID))
 	if newsErr == nil {
 		defer newsResp.Body.Close()
 		var steamNews SteamNewsResponse
@@ -1282,16 +1305,17 @@ func parseVersion(output string) string {
 	return "Unknown"
 }
 
-func getLocalBuildID(host *HostServer) (string, error) {
+func getLocalBuildID(host *HostServer, steamAppID int) (string, error) {
+	manifestName := fmt.Sprintf("appmanifest_%d.acf", steamAppID)
 	if isLocal(host) {
 		paths := []string{
-			"C:\\steamcmd\\steamapps\\appmanifest_2394010.acf",
-			"C:\\Program Files (x86)\\Steam\\steamapps\\appmanifest_2394010.acf",
+			filepath.Join("C:\\steamcmd\\steamapps", manifestName),
+			filepath.Join("C:\\Program Files (x86)\\Steam\\steamapps", manifestName),
 		}
 		if home, err := os.UserHomeDir(); err == nil {
-			paths = append(paths, filepath.Join(home, "Steam", "steamapps", "appmanifest_2394010.acf"))
-			paths = append(paths, filepath.Join(home, ".steam", "steam", "steamapps", "appmanifest_2394010.acf"))
-			paths = append(paths, filepath.Join(home, "steamcmd", "steamapps", "appmanifest_2394010.acf"))
+			paths = append(paths, filepath.Join(home, "Steam", "steamapps", manifestName))
+			paths = append(paths, filepath.Join(home, ".steam", "steam", "steamapps", manifestName))
+			paths = append(paths, filepath.Join(home, "steamcmd", "steamapps", manifestName))
 		}
 		for _, p := range paths {
 			if _, err := os.Stat(p); err == nil {
@@ -1303,10 +1327,10 @@ func getLocalBuildID(host *HostServer) (string, error) {
 		}
 	}
 
-	cmd := "find /home/steam /home /opt ~ -name appmanifest_2394010.acf 2>/dev/null | head -n 1 | xargs grep buildid"
+	cmd := fmt.Sprintf("find /home/steam /home /opt ~ -name %s 2>/dev/null | head -n 1 | xargs grep buildid", manifestName)
 	output, err := ExecuteCommand(host, cmd)
 	if err != nil || output == "" {
-		cmd = "find / -name appmanifest_2394010.acf 2>/dev/null | head -n 1 | xargs grep buildid"
+		cmd = fmt.Sprintf("find / -name %s 2>/dev/null | head -n 1 | xargs grep buildid", manifestName)
 		output, _ = ExecuteCommand(host, cmd)
 	}
 

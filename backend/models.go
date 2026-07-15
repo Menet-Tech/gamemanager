@@ -30,6 +30,7 @@ type GameProfile struct {
 	HostID     int    `json:"hostId"`
 	HostName   string `json:"hostName,omitempty"` // Joined from HostServer for UI
 	ConfigPath string `json:"configPath"`
+	SteamAppID int    `json:"steamAppId"`
 }
 
 // UserProfile represents the many-to-many relationship

@@ -193,7 +193,7 @@ export default function UserPanel({ onEditConfig }) {
                 </div>
               </div>
 
-              <div className="grid grid-cols-3 gap-2 mt-auto">
+              <div className={`grid ${p.steamAppId > 0 ? 'grid-cols-3' : 'grid-cols-2'} gap-2 mt-auto`}>
                 <button
                   onClick={() => onEditConfig(p)}
                   className="py-2 px-2.5 rounded-xl bg-slate-950/60 hover:bg-primary-600 border border-slate-800 hover:border-transparent text-white font-semibold text-[11px] flex items-center justify-center gap-1 transition-all"
@@ -211,29 +211,31 @@ export default function UserPanel({ onEditConfig }) {
                   <RefreshCw className={`w-3 h-3 ${restartingId === p.id ? 'animate-spin' : ''}`} />
                   <span>{restartingId === p.id ? 'Restarting' : 'Restart'}</span>
                 </button>
-                <button
-                  onClick={() => handleCheckUpdate(p)}
-                  disabled={checkingUpdateId === p.id || updatingId === p.id}
-                  className="py-2 px-2.5 rounded-xl bg-slate-950/60 hover:bg-emerald-600 border border-slate-800 hover:border-transparent text-white font-semibold text-[11px] flex items-center justify-center gap-1 transition-all disabled:opacity-50"
-                  title="Check for Server Updates"
-                >
-                  {updatingId === p.id ? (
-                    <>
-                      <RefreshCw className="w-3 h-3 animate-spin" />
-                      <span>Updating...</span>
-                    </>
-                  ) : checkingUpdateId === p.id ? (
-                    <>
-                      <RefreshCw className="w-3 h-3 animate-spin" />
-                      <span>Checking</span>
-                    </>
-                  ) : (
-                    <>
-                      <ArrowUpCircle className="w-3 h-3" />
-                      <span>Cek Update</span>
-                    </>
-                  )}
-                </button>
+                {p.steamAppId > 0 && (
+                  <button
+                    onClick={() => handleCheckUpdate(p)}
+                    disabled={checkingUpdateId === p.id || updatingId === p.id}
+                    className="py-2 px-2.5 rounded-xl bg-slate-950/60 hover:bg-emerald-600 border border-slate-800 hover:border-transparent text-white font-semibold text-[11px] flex items-center justify-center gap-1 transition-all disabled:opacity-50"
+                    title="Check for Server Updates"
+                  >
+                    {updatingId === p.id ? (
+                      <>
+                        <RefreshCw className="w-3 h-3 animate-spin" />
+                        <span>Updating...</span>
+                      </>
+                    ) : checkingUpdateId === p.id ? (
+                      <>
+                        <RefreshCw className="w-3 h-3 animate-spin" />
+                        <span>Checking</span>
+                      </>
+                    ) : (
+                      <>
+                        <ArrowUpCircle className="w-3 h-3" />
+                        <span>Cek Update</span>
+                      </>
+                    )}
+                  </button>
+                )}
               </div>
             </div>
           ))}

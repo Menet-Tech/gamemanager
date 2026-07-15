@@ -44,6 +44,7 @@ func initDB() {
 			game_type TEXT,
 			host_id INTEGER,
 			config_path TEXT,
+			steam_app_id INTEGER,
 			FOREIGN KEY(host_id) REFERENCES host_servers(id) ON DELETE CASCADE
 		);`,
 		`CREATE TABLE IF NOT EXISTS user_profiles (
@@ -67,6 +68,7 @@ func initDB() {
 	_, _ = db.Exec("ALTER TABLE host_servers ADD COLUMN restart_command TEXT")
 	_, _ = db.Exec("ALTER TABLE host_servers ADD COLUMN version_command TEXT")
 	_, _ = db.Exec("ALTER TABLE host_servers ADD COLUMN update_command TEXT")
+	_, _ = db.Exec("ALTER TABLE game_profiles ADD COLUMN steam_app_id INTEGER")
 
 	// Insert default admin if no users exist
 	var count int
