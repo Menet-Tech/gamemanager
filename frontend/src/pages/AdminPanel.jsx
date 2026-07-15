@@ -51,7 +51,6 @@ export default function AdminPanel({ section }) {
   const [gameType, setGameType] = useState('Palworld');
   const [profileHostId, setProfileHostId] = useState('0'); // '0' means local system
   const [configPath, setConfigPath] = useState('');
-  const [steamAppId, setSteamAppId] = useState('');
 
   // Edit states
   const [editingHost, setEditingHost] = useState(null);
@@ -232,13 +231,11 @@ export default function AdminPanel({ section }) {
           name: profileName,
           gameType,
           hostId: parseInt(profileHostId),
-          configPath,
-          steamAppId: parseInt(steamAppId) || 0
+          configPath
         }),
       });
       setProfileName('');
       setConfigPath('');
-      setSteamAppId('');
       showSuccessMessage('Game configuration profile added!');
       fetchData();
     } catch (err) {
@@ -310,7 +307,6 @@ export default function AdminPanel({ section }) {
     setGameType(profile.gameType || 'Palworld');
     setProfileHostId(profile.hostId ? profile.hostId.toString() : '0');
     setConfigPath(profile.configPath || '');
-    setSteamAppId(profile.steamAppId ? profile.steamAppId.toString() : '');
   };
 
   const handleEditProfile = async (e) => {
@@ -323,8 +319,7 @@ export default function AdminPanel({ section }) {
           name: profileName,
           gameType,
           hostId: parseInt(profileHostId),
-          configPath,
-          steamAppId: parseInt(steamAppId) || 0
+          configPath
         }),
       });
       setEditingProfile(null);
@@ -332,7 +327,6 @@ export default function AdminPanel({ section }) {
       setGameType('Palworld');
       setProfileHostId('0');
       setConfigPath('');
-      setSteamAppId('');
       showSuccessMessage('Game profile updated successfully!');
       fetchData();
     } catch (err) {
@@ -630,16 +624,6 @@ export default function AdminPanel({ section }) {
                   className="w-full px-4 py-2.5 rounded-xl bg-slate-950/40 border border-slate-800 text-white text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 transition-all"
                 />
               </div>
-              <div>
-                <label className="block text-xs font-semibold text-slate-400 mb-1.5 ml-1">Steam App ID (Optional, for Update Checking)</label>
-                <input
-                  type="number"
-                  value={steamAppId}
-                  onChange={(e) => setSteamAppId(e.target.value)}
-                  placeholder="e.g. 2394010"
-                  className="w-full px-4 py-2.5 rounded-xl bg-slate-950/40 border border-slate-800 text-white text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 transition-all"
-                />
-              </div>
               <button
                 type="submit"
                 className="w-full mt-2 py-2.5 rounded-xl bg-primary-600 hover:bg-primary-500 text-white font-semibold text-sm transition-all"
@@ -812,7 +796,6 @@ export default function AdminPanel({ section }) {
                     <tr className="border-b border-slate-800 text-slate-500 font-semibold">
                       <th className="pb-3 pl-2">Profile Name</th>
                       <th className="pb-3">Game Type</th>
-                      <th className="pb-3">Steam App ID</th>
                       <th className="pb-3">Host System</th>
                       <th className="pb-3">Path</th>
                       <th className="pb-3 text-right pr-2">Actions</th>
@@ -827,7 +810,6 @@ export default function AdminPanel({ section }) {
                             {p.gameType}
                           </span>
                         </td>
-                        <td className="py-3.5 text-slate-400 font-mono text-xs">{p.steamAppId || '-'}</td>
                         <td className="py-3.5 text-slate-400 text-xs">{p.hostName}</td>
                         <td className="py-3.5 text-slate-400 font-mono text-xs max-w-[150px] truncate" title={p.configPath}>
                           {p.configPath}
@@ -1161,16 +1143,6 @@ export default function AdminPanel({ section }) {
                   required
                 />
               </div>
-              <div>
-                <label className="block text-xs font-semibold text-slate-400 mb-1.5">Steam App ID (Optional, for Update Checking)</label>
-                <input
-                  type="number"
-                  value={steamAppId}
-                  onChange={(e) => setSteamAppId(e.target.value)}
-                  placeholder="e.g. 2394010"
-                  className="w-full px-4 py-2.5 rounded-xl bg-slate-950/50 border border-slate-800 text-white text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 transition-all"
-                />
-              </div>
               <div className="flex justify-end gap-3 mt-6">
                 <button
                   type="button"
@@ -1180,7 +1152,6 @@ export default function AdminPanel({ section }) {
                     setGameType('Palworld');
                     setProfileHostId('0');
                     setConfigPath('');
-                    setSteamAppId('');
                   }}
                   className="px-4 py-2 rounded-xl text-slate-400 hover:text-white hover:bg-slate-800 transition-all text-sm font-semibold"
                 >
