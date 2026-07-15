@@ -1076,6 +1076,7 @@ func GetProfileVersionHandler(w http.ResponseWriter, r *http.Request) {
 
 	output, err := ExecuteCommand(host, host.VersionCommand)
 	if err != nil {
+		log.Printf("[ERROR] Failed to run version command for host %s (IP: %s): %v, output: %s", host.Name, host.IP, err, output)
 		sendJSON(w, http.StatusOK, map[string]string{"version": "Failed to run version command"})
 		return
 	}
